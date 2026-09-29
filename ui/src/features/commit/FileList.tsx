@@ -11,6 +11,8 @@ const badges: Record<FileStatus, [string, string]> = {
   renamed: ["R", "text-warning"],
   copied: ["C", "text-warning"],
   typeChanged: ["T", "text-warning"],
+  untracked: ["U", "text-success"],
+  conflicted: ["!", "text-danger"],
   unknown: ["?", "text-fg-muted"],
 };
 

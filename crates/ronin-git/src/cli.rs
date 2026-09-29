@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -96,9 +96,60 @@ impl GitCli {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
+        self.exec(cwd, args, None, &[0])
+    }
+
+    /// Runs git with `input` on stdin and returns its stdout.
+    pub fn run_with_input<I, S>(&self, cwd: &Path, args: I, input: &[u8]) -> Result<String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.exec(cwd, args, Some(input), &[0])
+    }
+
+    /// Like [`run`](Self::run), but also accepts the given non-zero exit
+    /// codes (e.g. `git diff --no-index` exits with 1 when files differ).
+    pub fn run_accepting<I, S>(&self, cwd: &Path, args: I, codes: &[i32]) -> Result<String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.exec(cwd, args, None, codes)
+    }
+
+    fn exec<I, S>(&self, cwd: &Path, args: I, input: Option<&[u8]>, codes: &[i32]) -> Result<String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
         let args: Vec<OsString> = args.into_iter().map(|a| a.as_ref().to_owned()).collect();
-        let output = self.command(cwd).args(&args).output()?;
-        if output.status.success() {
+        let mut cmd = self.command(cwd);
+        cmd.args(&args);
+        let output = match input {
+            None => cmd.output()?,
+            Some(input) => {
+                let mut child = cmd
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()?;
+                // Written from another thread: git may fill its stdout pipe
+                // before it has read all of its input.
+                let mut stdin = child.stdin.take().expect("stdin is piped");
+                let input = input.to_owned();
+                let writer = std::thread::spawn(move || stdin.write_all(&input));
+                let output = child.wait_with_output()?;
+                // A broken pipe means git stopped reading early; its exit
+                // status and stderr say why.
+                match writer.join() {
+                    Ok(Err(e)) if e.kind() != io::ErrorKind::BrokenPipe => return Err(e.into()),
+                    _ => {}
+                }
+                output
+            }
+        };
+        if output.status.code().is_some_and(|c| codes.contains(&c)) {
             return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
         }
         Err(Error::Command {

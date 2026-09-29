@@ -16,6 +16,10 @@ pub enum Error {
     },
     #[error("not a git repository: {}", .0.display())]
     NotARepo(PathBuf),
+    #[error("{} has no working tree", .0.display())]
+    Bare(PathBuf),
+    #[error("{0}")]
+    Invalid(String),
     #[error("git: {0}")]
     Gix(String),
     #[error(transparent)]

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use gix::ObjectId;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::error::gix_err;
@@ -49,7 +49,7 @@ pub struct FileChange {
     pub deletions: Option<u32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum FileStatus {
@@ -59,6 +59,10 @@ pub enum FileStatus {
     Renamed,
     Copied,
     TypeChanged,
+    /// Only in the working tree (uncommitted changes).
+    Untracked,
+    /// Unmerged, with conflicts to resolve (uncommitted changes).
+    Conflicted,
     Unknown,
 }
 
@@ -169,7 +173,7 @@ fn parse_diff_tree(output: &str) -> Vec<FileChange> {
     files
 }
 
-fn parse_status(status: &str) -> FileStatus {
+pub(crate) fn parse_status(status: &str) -> FileStatus {
     match status.chars().next() {
         Some('A') => FileStatus::Added,
         Some('M') => FileStatus::Modified,

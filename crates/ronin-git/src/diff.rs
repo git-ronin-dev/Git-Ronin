@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::repo::discover;
-use crate::{GitCli, Result};
+use crate::{Error, FileStatus, GitCli, Result, StatusEntry};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -14,7 +14,7 @@ pub struct FileDiff {
     pub hunks: Vec<Hunk>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Hunk {
@@ -27,19 +27,21 @@ pub struct Hunk {
     pub lines: Vec<DiffLine>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct DiffLine {
     pub kind: LineKind,
     pub old_line: Option<u32>,
     pub new_line: Option<u32>,
+    /// The line without its `\n`. A `\r` from CRLF files is kept, so hunks
+    /// can be turned back into patches that apply.
     pub text: String,
     /// Followed by "\ No newline at end of file".
     pub no_newline: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum LineKind {
@@ -78,25 +80,68 @@ pub fn file_diff(
     let repo = discover(path)?;
     let empty_tree = repo.object_hash().empty_tree().to_string();
     let workdir = repo.workdir().unwrap_or(repo.git_dir());
-    let context = format!("-U{}", options.context_lines);
+    let mut args = diff_args(options);
+    args.extend([base.unwrap_or(&empty_tree).to_owned(), target.to_owned()]);
+    args.push("--".into());
+    args.extend(old_path.map(str::to_owned));
+    args.push(file_path.to_owned());
+    Ok(parse_unified(&git.run(workdir, &args)?))
+}
 
-    // Literal pathspecs: file names like `*.txt` or `:x` must not be interpreted.
-    let mut args = vec![
+/// Diffs an uncommitted change: HEAD to index when `staged`, else index to
+/// working tree. Untracked files diff against nothing; conflicted files
+/// against HEAD, showing the conflict markers.
+pub fn working_diff(
+    git: &GitCli,
+    path: &Path,
+    entry: &StatusEntry,
+    staged: bool,
+    options: DiffOptions,
+) -> Result<FileDiff> {
+    let repo = discover(path)?;
+    let workdir = repo.workdir().ok_or_else(|| Error::Bare(path.to_owned()))?;
+    let mut args = diff_args(options);
+    let output = match entry.status {
+        FileStatus::Untracked if !staged => {
+            args.extend(["--no-index", "--", "/dev/null", &entry.path].map(str::to_owned));
+            // Exits with 1 when the files differ, which they always do here.
+            git.run_accepting(workdir, &args, &[0, 1])?
+        }
+        _ => {
+            if staged {
+                args.push("--cached".into());
+            } else if entry.status == FileStatus::Conflicted {
+                args.push("HEAD".into());
+            }
+            args.push("--".into());
+            if staged {
+                args.extend(entry.old_path.clone());
+            }
+            args.push(entry.path.clone());
+            git.run(workdir, &args)?
+        }
+    };
+    Ok(parse_unified(&output))
+}
+
+fn diff_args(options: DiffOptions) -> Vec<String> {
+    // Literal pathspecs: file names like `*.txt` or `:x` must not be
+    // interpreted. No optional locks: a read must not rewrite the index.
+    let mut args: Vec<String> = [
         "--literal-pathspecs",
+        "--no-optional-locks",
         "diff",
         "--no-color",
         "--no-ext-diff",
         "-M",
-        &context,
-    ];
+    ]
+    .map(str::to_owned)
+    .into();
+    args.push(format!("-U{}", options.context_lines));
     if options.ignore_whitespace {
-        args.push("-w");
+        args.push("-w".into());
     }
-    args.extend([base.unwrap_or(&empty_tree), target, "--"]);
-    args.extend(old_path);
-    args.push(file_path);
-
-    Ok(parse_unified(&git.run(workdir, &args)?))
+    args
 }
 
 /// Parses the output of `git diff` for a single file.
@@ -104,7 +149,8 @@ pub fn parse_unified(output: &str) -> FileDiff {
     let mut diff = FileDiff::default();
     let (mut old_no, mut new_no) = (0, 0);
 
-    for line in output.lines() {
+    // Not `lines()`, which would also strip the `\r` of CRLF files.
+    for line in output.split_terminator('\n') {
         if let Some(header) = line.strip_prefix("@@ ") {
             let Some((old_start, old_lines, new_start, new_lines)) = parse_hunk_header(header)
             else {
@@ -218,6 +264,17 @@ mod tests {
         assert_eq!((h.old_start, h.old_lines), (10, 1));
         assert!(h.lines[1].no_newline);
         assert!(!h.lines[0].no_newline);
+    }
+
+    #[test]
+    fn keeps_carriage_returns() {
+        let diff = parse_unified("@@ -1 +1 @@\n-a\r\n+b\r\n");
+        let texts: Vec<_> = diff.hunks[0]
+            .lines
+            .iter()
+            .map(|l| l.text.as_str())
+            .collect();
+        assert_eq!(texts, ["a\r", "b\r"]);
     }
 
     #[test]
