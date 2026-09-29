@@ -1,0 +1,57 @@
+/*
+ * Design tokens. Every colour, radius and font in the app comes from here,
+ * so the Phase 8 ronin theme is a token swap rather than a rewrite.
+ * Dark is the default; `data-theme="light"` on <html> switches palettes.
+ */
+:root {
+  color-scheme: dark;
+
+  --rn-canvas: #141518;
+  --rn-surface: #1b1c20;
+  --rn-raised: #24252a;
+  --rn-hover: #2c2d33;
+  --rn-line: #2e3036;
+  --rn-fg: #e4e4e7;
+  --rn-fg-muted: #9a9ba3;
+  --rn-fg-faint: #62636b;
+  --rn-accent: #6b8cff;
+  --rn-accent-fg: #0b0c10;
+  --rn-danger: #ef5b5b;
+  --rn-success: #4cb782;
+  --rn-warning: #f0a93a;
+
+  /* Commit graph lanes, cycled by lane index. */
+  --rn-lane-0: #6b8cff;
+  --rn-lane-1: #4cb782;
+  --rn-lane-2: #f0a93a;
+  --rn-lane-3: #d46ed8;
+  --rn-lane-4: #3fb8c9;
+  --rn-lane-5: #ef5b5b;
+  --rn-lane-6: #a3b848;
+  --rn-lane-7: #b08968;
+
+  --rn-radius-sm: 4px;
+  --rn-radius-md: 6px;
+  --rn-radius-lg: 10px;
+
+  --rn-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --rn-font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --rn-canvas: #f6f6f7;
+  --rn-surface: #ffffff;
+  --rn-raised: #f0f0f2;
+  --rn-hover: #e7e7ea;
+  --rn-line: #dcdce0;
+  --rn-fg: #1c1d21;
+  --rn-fg-muted: #5f6068;
+  --rn-fg-faint: #9a9ba3;
+  --rn-accent: #3d63e0;
+  --rn-accent-fg: #ffffff;
+  --rn-danger: #d93a3a;
+  --rn-success: #23915c;
+  --rn-warning: #b5740f;
+}

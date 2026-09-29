@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Placeholder mark: an open ensō on sumi ink. Replaced in Phase 8. -->
+  <rect width="1024" height="1024" rx="224" fill="#141518"/>
+  <path d="M 700 285 A 290 290 0 1 0 790 470" fill="none" stroke="#e0402f" stroke-width="84" stroke-linecap="round"/>
+  <circle cx="512" cy="512" r="70" fill="#e4e4e7"/>
+</svg>

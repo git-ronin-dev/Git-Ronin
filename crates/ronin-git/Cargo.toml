@@ -1,0 +1,16 @@
+[package]
+name = "ronin-git"
+description = "Git engine for Git Ronin: gix for reads, git CLI for writes and network."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+gix.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

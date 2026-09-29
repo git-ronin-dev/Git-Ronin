@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@import "./ui/tokens.css";
+
+/* Only token colours exist; Tailwind's default palette is switched off. */
+@theme inline {
+  --color-*: initial;
+  --color-canvas: var(--rn-canvas);
+  --color-surface: var(--rn-surface);
+  --color-raised: var(--rn-raised);
+  --color-hover: var(--rn-hover);
+  --color-line: var(--rn-line);
+  --color-fg: var(--rn-fg);
+  --color-fg-muted: var(--rn-fg-muted);
+  --color-fg-faint: var(--rn-fg-faint);
+  --color-accent: var(--rn-accent);
+  --color-accent-fg: var(--rn-accent-fg);
+  --color-danger: var(--rn-danger);
+  --color-success: var(--rn-success);
+  --color-warning: var(--rn-warning);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --radius-sm: var(--rn-radius-sm);
+  --radius-md: var(--rn-radius-md);
+  --radius-lg: var(--rn-radius-lg);
+
+  --font-sans: var(--rn-font-sans);
+  --font-mono: var(--rn-font-mono);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--rn-canvas);
+    color: var(--rn-fg);
+    font-family: var(--rn-font-sans);
+    font-size: 13px;
+    /* Desktop app, not a document: no accidental text selection or overscroll. */
+    user-select: none;
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--rn-accent);
+    outline-offset: 1px;
+  }
+}
