@@ -37,6 +37,19 @@ fn main() {
             commands::commit_detail,
             commands::file_diff,
             commands::blob,
+            commands::working_status,
+            commands::working_diff,
+            commands::working_blob,
+            commands::stage_files,
+            commands::unstage_files,
+            commands::discard_files,
+            commands::apply_lines,
+            commands::commit,
+            commands::head_message,
+            commands::stash_push,
+            commands::stash_apply,
+            commands::stash_drop,
+            commands::add_to_gitignore,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Git Ronin");

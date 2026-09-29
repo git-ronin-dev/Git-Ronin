@@ -6,7 +6,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use ronin_config::{Config, UiPrefs};
-use ronin_git::{CommitDetail, DiffOptions, FileDiff, GitVersion, GraphPage, Refs, RepoInfo};
+use ronin_git::{
+    BlobSource, CommitDetail, CommitOptions, DiffOptions, FileDiff, GitVersion, GraphPage, Hunk,
+    IgnoreScope, LineSelection, PatchTarget, Refs, RepoInfo, StashOptions, StatusEntry,
+    WorkingStatus,
+};
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -15,6 +19,9 @@ use crate::watcher;
 
 /// Event emitted with the repository path when its refs change on disk.
 pub const REPO_CHANGED: &str = "repo-changed";
+/// Event emitted with the repository path when its index or working tree
+/// change on disk.
+pub const WORKTREE_CHANGED: &str = "worktree-changed";
 
 async fn blocking<T: Send + 'static>(
     app: &AppHandle,
@@ -245,23 +252,193 @@ pub async fn blob(app: AppHandle, repo: String, oid: String, path: String) -> Cm
     .await
 }
 
+#[tauri::command]
+pub async fn working_status(app: AppHandle, repo: String) -> CmdResult<WorkingStatus> {
+    blocking(&app, move |_, s| {
+        ronin_git::status(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+/// Diff of an uncommitted change: HEAD to index when `staged`, else index
+/// to working tree.
+#[tauri::command]
+pub async fn working_diff(
+    app: AppHandle,
+    repo: String,
+    entry: StatusEntry,
+    staged: bool,
+    options: DiffOptions,
+) -> CmdResult<FileDiff> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        ronin_git::working_diff(s.git()?, &session.path, &entry, staged, options).map_err(err)
+    })
+    .await
+}
+
+/// Raw contents of a file in HEAD, the index or the working tree.
+#[tauri::command]
+pub async fn working_blob(
+    app: AppHandle,
+    repo: String,
+    path: String,
+    source: BlobSource,
+) -> CmdResult<Response> {
+    blocking(&app, move |_, s| {
+        ronin_git::working_blob(&s.session(&repo)?.path, &path, source)
+            .map_err(err)?
+            .map(Response::new)
+            .ok_or_else(|| format!("{path} does not exist there"))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn stage_files(app: AppHandle, repo: String, paths: Vec<String>) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::stage_files(s.git()?, &s.session(&repo)?.path, &paths).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn unstage_files(app: AppHandle, repo: String, paths: Vec<String>) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::unstage_files(s.git()?, &s.session(&repo)?.path, &paths).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn discard_files(
+    app: AppHandle,
+    repo: String,
+    entries: Vec<StatusEntry>,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::discard_files(s.git()?, &s.session(&repo)?.path, &entries).map_err(err)
+    })
+    .await
+}
+
+/// Stages, unstages or discards chosen lines of `hunks`, the diff the UI
+/// is showing for `path`.
+#[tauri::command]
+pub async fn apply_lines(
+    app: AppHandle,
+    repo: String,
+    path: String,
+    hunks: Vec<Hunk>,
+    selection: Vec<LineSelection>,
+    target: PatchTarget,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        ronin_git::apply_lines(s.git()?, &session.path, &path, &hunks, &selection, target)
+            .map_err(err)
+    })
+    .await
+}
+
+/// Commits the index and returns the new HEAD.
+#[tauri::command]
+pub async fn commit(
+    app: AppHandle,
+    repo: String,
+    message: String,
+    options: CommitOptions,
+) -> CmdResult<String> {
+    blocking(&app, move |_, s| {
+        let oid = ronin_git::commit(s.git()?, &s.session(&repo)?.path, &message, options);
+        s.refs_moved(&repo);
+        oid.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn head_message(app: AppHandle, repo: String) -> CmdResult<Option<String>> {
+    blocking(&app, move |_, s| {
+        ronin_git::head_message(&s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+/// Returns false if there was nothing to stash.
+#[tauri::command]
+pub async fn stash_push(app: AppHandle, repo: String, options: StashOptions) -> CmdResult<bool> {
+    blocking(&app, move |_, s| {
+        let created = ronin_git::stash_push(s.git()?, &s.session(&repo)?.path, &options);
+        s.refs_moved(&repo);
+        created.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn stash_apply(
+    app: AppHandle,
+    repo: String,
+    index: u32,
+    oid: String,
+    pop: bool,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let result = ronin_git::stash_apply(s.git()?, &s.session(&repo)?.path, index, &oid, pop);
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn stash_drop(app: AppHandle, repo: String, index: u32, oid: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let result = ronin_git::stash_drop(s.git()?, &s.session(&repo)?.path, index, &oid);
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+/// Adds a pattern covering `path` to the root `.gitignore`; returns it.
+#[tauri::command]
+pub async fn add_to_gitignore(
+    app: AppHandle,
+    repo: String,
+    path: String,
+    scope: IgnoreScope,
+) -> CmdResult<String> {
+    blocking(&app, move |_, s| {
+        ronin_git::add_to_gitignore(&s.session(&repo)?.path, &path, scope).map_err(err)
+    })
+    .await
+}
+
 /// Opens (or reuses) the session for the repository containing `path`.
 fn start_session(app: &AppHandle, state: &AppState, path: &Path) -> CmdResult<RepoInfo> {
     let info = ronin_git::open_repo(path).map_err(err)?;
     let mut repos = lock(&state.repos);
     if !repos.contains_key(&info.path) {
         let (git_dir, common_dir) = ronin_git::git_dirs(path).map_err(err)?;
+        let workdir = (!info.is_bare).then(|| PathBuf::from(&info.path));
         let session = Arc::new_cyclic(|weak: &std::sync::Weak<RepoSession>| {
             let weak = weak.clone();
             let app = app.clone();
             let repo = info.path.clone();
-            let watcher = watcher::watch(&git_dir, &common_dir, move || {
-                if let Some(session) = weak.upgrade() {
-                    *lock(&session.graph) = None;
+            let on_change = move |changes: watcher::Changes| {
+                if changes.refs {
+                    if let Some(session) = weak.upgrade() {
+                        *lock(&session.graph) = None;
+                    }
+                    let _ = app.emit(REPO_CHANGED, &repo);
                 }
-                let _ = app.emit(REPO_CHANGED, &repo);
-            })
-            .ok();
+                if changes.worktree {
+                    let _ = app.emit(WORKTREE_CHANGED, &repo);
+                }
+            };
+            let watcher = watcher::watch(&git_dir, &common_dir, workdir.as_deref(), on_change).ok();
             RepoSession {
                 path: PathBuf::from(&info.path),
                 graph: Mutex::new(None),

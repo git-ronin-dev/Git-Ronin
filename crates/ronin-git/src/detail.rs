@@ -7,7 +7,7 @@ use ts_rs::TS;
 
 use crate::error::gix_err;
 use crate::repo::discover;
-use crate::{GitCli, Result};
+use crate::{Error, GitCli, Result};
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -121,6 +121,51 @@ pub fn blob_at(path: &Path, oid: &str, file_path: &str) -> Result<Option<Vec<u8>
         return Ok(None);
     };
     let object = entry.object().map_err(gix_err)?;
+    Ok(Some(object.detach().data))
+}
+
+/// A version of a file with uncommitted changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum BlobSource {
+    Head,
+    Index,
+    Worktree,
+}
+
+/// Reads `file_path` from HEAD, the index or the working tree. `None` if it
+/// doesn't exist there.
+pub fn working_blob(path: &Path, file_path: &str, source: BlobSource) -> Result<Option<Vec<u8>>> {
+    let repo = discover(path)?;
+    let id = match source {
+        BlobSource::Head => {
+            let Ok(commit) = repo.head_commit() else {
+                return Ok(None);
+            };
+            let tree = commit.tree().map_err(gix_err)?;
+            match tree.lookup_entry_by_path(file_path).map_err(gix_err)? {
+                Some(entry) => entry.object_id(),
+                None => return Ok(None),
+            }
+        }
+        BlobSource::Index => {
+            let index = repo.index_or_empty().map_err(gix_err)?;
+            match index.entry_by_path(file_path.into()) {
+                Some(entry) => entry.id,
+                None => return Ok(None),
+            }
+        }
+        BlobSource::Worktree => {
+            let workdir = repo.workdir().ok_or_else(|| Error::Bare(path.to_owned()))?;
+            return match std::fs::read(workdir.join(file_path)) {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(e) => Err(e.into()),
+            };
+        }
+    };
+    let object = repo.find_object(id).map_err(gix_err)?;
     Ok(Some(object.detach().data))
 }
 

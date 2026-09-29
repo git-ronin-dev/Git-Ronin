@@ -10,7 +10,8 @@ license.workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-notify-debouncer-mini = "0.7"
+ignore = "0.4"
+notify = "8"
 ronin-config.workspace = true
 ronin-git.workspace = true
 serde.workspace = true

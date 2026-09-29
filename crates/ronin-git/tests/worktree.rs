@@ -2,10 +2,10 @@ mod common;
 
 use common::TestRepo;
 use ronin_git::{
-    CommitOptions, DiffOptions, FileStatus, IgnoreScope, LineKind, LineSelection, PatchTarget,
-    StashOptions, StatusEntry, WorkingStatus, add_to_gitignore, apply_lines, commit, discard_files,
-    head_message, list_refs, stage_files, stash_apply, stash_drop, stash_push, status,
-    unstage_files, working_diff,
+    BlobSource, CommitOptions, DiffOptions, FileStatus, IgnoreScope, LineKind, LineSelection,
+    PatchTarget, StashOptions, StatusEntry, WorkingStatus, add_to_gitignore, apply_lines, commit,
+    discard_files, head_message, list_refs, stage_files, stash_apply, stash_drop, stash_push,
+    status, unstage_files, working_blob, working_diff,
 };
 
 fn paths(entries: &[StatusEntry]) -> Vec<(&str, FileStatus)> {
@@ -499,4 +499,22 @@ fn adds_patterns_to_gitignore() {
         ]
     );
     assert!(add_to_gitignore(repo.path(), "keep.txt", IgnoreScope::Folder).is_err());
+}
+
+#[test]
+fn reads_blobs_from_head_index_and_working_tree() {
+    let repo = TestRepo::new();
+    let blob = |source| working_blob(repo.path(), "f.bin", source).unwrap();
+    assert_eq!(blob(BlobSource::Head), None);
+    repo.commit_file("f.bin", "head", "init");
+    repo.write("f.bin", "index");
+    repo.git(&["add", "f.bin"]);
+    repo.write("f.bin", "worktree");
+    assert_eq!(blob(BlobSource::Head).unwrap(), b"head");
+    assert_eq!(blob(BlobSource::Index).unwrap(), b"index");
+    assert_eq!(blob(BlobSource::Worktree).unwrap(), b"worktree");
+    assert_eq!(
+        working_blob(repo.path(), "nope", BlobSource::Index).unwrap(),
+        None
+    );
 }

@@ -23,7 +23,10 @@ mod status;
 
 pub use cli::{GitCli, GitVersion, MIN_GIT_VERSION};
 pub use commit::{CommitOptions, commit, head_message};
-pub use detail::{CommitDetail, FileChange, FileStatus, Signature, blob_at, commit_detail};
+pub use detail::{
+    BlobSource, CommitDetail, FileChange, FileStatus, Signature, blob_at, commit_detail,
+    working_blob,
+};
 pub use diff::{
     DiffLine, DiffOptions, FileDiff, Hunk, LineKind, file_diff, parse_unified, working_diff,
 };

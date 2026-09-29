@@ -65,6 +65,14 @@ impl AppState {
         }
     }
 
+    /// Drops the cached graph after an action that moved refs, so the next
+    /// page request sees them without waiting for the watcher.
+    pub fn refs_moved(&self, repo: &str) {
+        if let Ok(session) = self.session(repo) {
+            *lock(&session.graph) = None;
+        }
+    }
+
     /// Runs `f` on the repository's graph, building it first if needed.
     pub fn with_graph<T>(
         &self,
