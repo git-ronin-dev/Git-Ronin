@@ -1,11 +1,12 @@
 import { clsx } from "clsx";
 import { Plus, X } from "lucide-react";
 
+import { openDialog } from "../features/ops/dialogs";
 import { useWorkspace } from "../features/workspace/store";
-import { Tooltip } from "../ui/Tooltip";
+import { DropdownMenu } from "../ui/DropdownMenu";
 
 export function RepoTabs() {
-  const { tabs, active, activate, close, pickAndOpen } = useWorkspace();
+  const { tabs, active, activate, close, pickAndOpen, pickAndInit } = useWorkspace();
   return (
     <div
       role="tablist"
@@ -45,16 +46,21 @@ export function RepoTabs() {
           </button>
         </div>
       ))}
-      <Tooltip content="Open repository (Ctrl+O)">
+      <DropdownMenu
+        items={[
+          { label: "Open repository… (Ctrl+O)", onSelect: () => void pickAndOpen() },
+          { label: "Clone…", onSelect: () => openDialog({ kind: "clone" }) },
+          { label: "New repository…", onSelect: () => void pickAndInit() },
+        ]}
+      >
         <button
           type="button"
-          aria-label="Open repository"
-          onClick={() => void pickAndOpen()}
+          aria-label="Open, clone or create a repository"
           className="mb-1 flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
         >
           <Plus className="size-4" />
         </button>
-      </Tooltip>
+      </DropdownMenu>
     </div>
   );
 }

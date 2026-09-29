@@ -1,8 +1,13 @@
 import type { RefLabel } from "../../bindings/RefLabel";
+import type { DragRef } from "../ops/drag";
 
 export interface Chip {
+  /** Full name of the chip's main ref (the local branch, if any). */
   key: string;
+  kind: RefLabel["kind"];
   text: string;
+  /** For a remote-only chip: its remote. */
+  remoteName: string | null;
   local: boolean;
   remote: boolean;
   tag: boolean;
@@ -17,9 +22,11 @@ export function toChips(refs: RefLabel[]): Chip[] {
   const byBranch = new Map<string, Chip>();
   for (const r of refs) {
     if (r.kind === "local" || r.kind === "head") {
-      const chip = {
+      const chip: Chip = {
         key: r.fullName,
+        kind: r.kind,
         text: r.name,
+        remoteName: null,
         local: r.kind === "local",
         remote: false,
         tag: false,
@@ -37,7 +44,9 @@ export function toChips(refs: RefLabel[]): Chip[] {
       else
         chips.push({
           key: r.fullName,
+          kind: r.kind,
           text: r.name,
+          remoteName: r.remote,
           local: false,
           remote: true,
           tag: false,
@@ -46,7 +55,9 @@ export function toChips(refs: RefLabel[]): Chip[] {
     } else if (r.kind === "tag") {
       chips.push({
         key: r.fullName,
+        kind: r.kind,
         text: r.name,
+        remoteName: null,
         local: false,
         remote: false,
         tag: true,
@@ -58,4 +69,23 @@ export function toChips(refs: RefLabel[]): Chip[] {
   return chips.sort(
     (a, b) => Number(b.current) - Number(a.current) || Number(a.tag) - Number(b.tag),
   );
+}
+
+/** The branch a chip stands for, if it is one. */
+export function chipRef(chip: Chip, oid: string): DragRef | null {
+  if (chip.kind === "local") {
+    return { kind: "local", name: chip.text, fullName: chip.key, oid };
+  }
+  if (chip.kind === "remote" && chip.remoteName) {
+    const branch = chip.text.slice(chip.remoteName.length + 1);
+    return {
+      kind: "remote",
+      name: chip.text,
+      fullName: chip.key,
+      oid,
+      remote: chip.remoteName,
+      branch,
+    };
+  }
+  return null;
 }

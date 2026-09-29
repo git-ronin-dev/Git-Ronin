@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use ronin_config::ConfigStore;
-use ronin_git::{GitCli, Graph, GraphFilter};
+use ronin_git::{GitCli, Graph, GraphFilter, Journal, UndoStyle};
 
+use crate::askpass::{self, Askpass};
 use crate::watcher::RepoWatcher;
 
 pub type CmdResult<T> = Result<T, String>;
@@ -16,6 +17,9 @@ pub fn err(e: impl ToString) -> String {
 pub struct AppState {
     /// Resolved once at startup so the UI can show a banner if git is missing.
     pub git: Result<GitCli, String>,
+    /// `None` if the prompt server could not start; git then relies on
+    /// credential helpers alone.
+    pub askpass: Option<Arc<Askpass>>,
     pub config: Mutex<ConfigStore>,
     /// Problems found while loading settings, shown once by the UI.
     pub config_warnings: Mutex<Vec<String>>,
@@ -27,14 +31,28 @@ pub struct RepoSession {
     pub path: PathBuf,
     /// Built on first use and dropped whenever the refs change.
     pub graph: Mutex<Option<Graph>>,
+    /// Undo history. Also held for the whole of every action that moves
+    /// refs, so those run one at a time.
+    pub journal: Mutex<Journal>,
     /// `None` if the platform refused to watch; the UI then relies on manual refresh.
     pub _watcher: Option<RepoWatcher>,
 }
 
 impl AppState {
-    pub fn new(config: ConfigStore, config_warnings: Vec<String>) -> Self {
+    pub fn new(
+        config: ConfigStore,
+        config_warnings: Vec<String>,
+        askpass: Option<Arc<Askpass>>,
+    ) -> Self {
+        let git = GitCli::discover().map(|mut git| {
+            for (key, value) in askpass.iter().flat_map(|a| a.env()) {
+                git = git.env(key, value);
+            }
+            git
+        });
         Self {
-            git: GitCli::discover().map_err(err),
+            git: git.map_err(err),
+            askpass,
             config: Mutex::new(config),
             config_warnings: Mutex::new(config_warnings),
             repos: Mutex::new(HashMap::new()),
@@ -43,6 +61,12 @@ impl AppState {
 
     pub fn git(&self) -> CmdResult<&GitCli> {
         self.git.as_ref().map_err(Clone::clone)
+    }
+
+    /// Git for commands the user didn't start: credential prompts fail
+    /// instead of popping up.
+    pub fn background_git(&self) -> CmdResult<GitCli> {
+        Ok(self.git()?.clone().env(askpass::BACKGROUND_ENV, "1"))
     }
 
     pub fn config(&self) -> MutexGuard<'_, ConfigStore> {
@@ -71,6 +95,30 @@ impl AppState {
         if let Ok(session) = self.session(repo) {
             *lock(&session.graph) = None;
         }
+    }
+
+    /// Runs an action that may move refs, recording it for undo as `label`.
+    pub fn journaled<T>(
+        &self,
+        repo: &str,
+        label: impl Into<String>,
+        style: UndoStyle,
+        f: impl FnOnce(&GitCli, &Path) -> ronin_git::Result<T>,
+    ) -> CmdResult<T> {
+        let session = self.session(repo)?;
+        let git = self.git()?;
+        let mut journal = lock(&session.journal);
+        let before = ronin_git::snapshot(git, &session.path);
+        let result = f(git, &session.path);
+        self.refs_moved(repo);
+        match (before, ronin_git::snapshot(git, &session.path)) {
+            (Ok(before), Ok(after)) => {
+                journal.record(git, &session.path, label, &before, &after, style)
+            }
+            // Can't tell what happened; don't offer to undo it.
+            _ => journal.clear(),
+        }
+        result.map_err(err)
     }
 
     /// Runs `f` on the repository's graph, building it first if needed.

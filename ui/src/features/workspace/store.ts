@@ -1,6 +1,7 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { create } from "zustand";
 
+import type { RepoInfo } from "../../bindings/RepoInfo";
 import { ipc } from "../../lib/ipc";
 import { toast } from "../../ui/toast-store";
 
@@ -18,6 +19,10 @@ interface WorkspaceState {
   open: (path: string) => Promise<void>;
   /** Shows a folder picker, then opens the chosen repository. */
   pickAndOpen: () => Promise<void>;
+  /** Shows a folder picker, then creates a repository there and opens it. */
+  pickAndInit: () => Promise<void>;
+  /** Shows a repository the backend already opened (after a clone or init). */
+  adopt: (info: RepoInfo) => void;
   close: (path: string) => Promise<void>;
   activate: (path: string) => void;
 }
@@ -44,11 +49,7 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
   open: async (path) => {
     set({ opening: true });
     try {
-      const { path: root, name } = await ipc.openRepo(path);
-      set((s) => ({
-        tabs: s.tabs.some((t) => t.path === root) ? s.tabs : [...s.tabs, { path: root, name }],
-        active: root,
-      }));
+      get().adopt(await ipc.openRepo(path));
     } catch (err) {
       reportError("Could not open repository")(err);
     } finally {
@@ -60,6 +61,25 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
     const path = await openDialog({ directory: true, title: "Open repository" });
     if (path) await get().open(path);
   },
+
+  pickAndInit: async () => {
+    const path = await openDialog({ directory: true, title: "Create repository in" });
+    if (!path) return;
+    set({ opening: true });
+    try {
+      get().adopt(await ipc.initRepo(path));
+    } catch (err) {
+      reportError("Could not create repository")(err);
+    } finally {
+      set({ opening: false });
+    }
+  },
+
+  adopt: ({ path, name }) =>
+    set((s) => ({
+      tabs: s.tabs.some((t) => t.path === path) ? s.tabs : [...s.tabs, { path, name }],
+      active: path,
+    })),
 
   close: async (path) => {
     const { tabs, active } = get();

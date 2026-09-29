@@ -1,22 +1,33 @@
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, FolderPlus, Download } from "lucide-react";
 
+import { openDialog } from "../features/ops/dialogs";
 import { useConfig } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
 import { Button } from "../ui/Button";
 
 export function EmptyState() {
-  const { pickAndOpen, open, opening } = useWorkspace();
+  const { pickAndOpen, pickAndInit, open, opening } = useWorkspace();
   const recent = useConfig().data?.local.recentRepos ?? [];
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
       <h1 className="text-2xl font-semibold tracking-tight">Git Ronin</h1>
       <p className="text-fg-muted">Open a repository to get started.</p>
-      <Button variant="primary" onClick={() => void pickAndOpen()} disabled={opening}>
-        <FolderOpen className="size-4" />
-        Open repository…
-      </Button>
-      <p className="text-xs text-fg-faint">Ctrl+O</p>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button variant="primary" onClick={() => void pickAndOpen()} disabled={opening}>
+          <FolderOpen className="size-4" />
+          Open repository…
+        </Button>
+        <Button onClick={() => openDialog({ kind: "clone" })} disabled={opening}>
+          <Download className="size-4" />
+          Clone…
+        </Button>
+        <Button onClick={() => void pickAndInit()} disabled={opening}>
+          <FolderPlus className="size-4" />
+          New repository…
+        </Button>
+      </div>
+      <p className="text-xs text-fg-faint">Ctrl+O opens a repository</p>
 
       {recent.length > 0 && (
         <section className="mt-6 w-full max-w-md text-left">

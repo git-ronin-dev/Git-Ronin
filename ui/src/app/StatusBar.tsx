@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { GitBranch, TriangleAlert } from "lucide-react";
+import { GitBranch, LoaderCircle, TriangleAlert } from "lucide-react";
 
+import { useTask } from "../features/ops/tasks";
 import { describeHead } from "../features/repo/head";
 import { useRefs, useRepoInfo } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
@@ -13,6 +14,7 @@ export function StatusBar() {
   return (
     <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-line bg-surface px-3 text-xs text-fg-muted">
       {active && <RepoStatus repo={active} />}
+      {active && <TaskStatus repo={active} />}
       <span className="ml-auto shrink-0">
         {git.data && `git ${git.data.major}.${git.data.minor}.${git.data.patch}`}
         {git.isError && (
@@ -45,5 +47,23 @@ function RepoStatus({ repo }: { repo: string }) {
       </span>
       <span className="truncate text-fg-faint select-text">{info.path}</span>
     </>
+  );
+}
+
+/** The network command running in the repository, with git's progress. */
+function TaskStatus({ repo }: { repo: string }) {
+  const task = useTask(repo);
+  if (!task) return null;
+  return (
+    <span role="status" className="flex min-w-0 shrink items-center gap-1.5 text-fg">
+      <LoaderCircle className="size-3 shrink-0 animate-spin" />
+      <span className="shrink-0">{task.label}…</span>
+      {task.message && (
+        <span className="truncate text-fg-muted">
+          {task.message}
+          {task.percent !== null && ` ${task.percent}%`}
+        </span>
+      )}
+    </span>
   );
 }

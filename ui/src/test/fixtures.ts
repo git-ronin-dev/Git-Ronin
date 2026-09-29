@@ -14,6 +14,7 @@ export const repoInfo: RepoInfo = {
 export const config: Config = {
   portable: {
     ui: { theme: "dark", showAvatars: false, diffView: "unified", ignoreWhitespace: false },
+    git: { autoFetchMinutes: 0 },
   },
   local: { recentRepos: ["/work/ronin"], openTabs: [], activeTab: null, repos: {} },
 };

@@ -17,6 +17,8 @@ vi.mock("../lib/ipc", () => ({
     graphPage: vi.fn(),
     graphSearch: vi.fn(),
     workingStatus: vi.fn(),
+    journalState: vi.fn(),
+    pendingMessage: vi.fn(),
   },
 }));
 
@@ -45,6 +47,8 @@ describe("AppShell", () => {
       maxLanes: 1,
     });
     vi.mocked(ipc.workingStatus).mockResolvedValue({ staged: [], unstaged: [], conflicted: [] });
+    vi.mocked(ipc.journalState).mockResolvedValue({ undo: null, redo: null });
+    vi.mocked(ipc.pendingMessage).mockResolvedValue(null);
     useWorkspace.setState({ tabs: [], active: null });
   });
 
@@ -98,5 +102,28 @@ describe("AppShell", () => {
     expect(within(unstaged).getByText("notes.md")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Staged" })).toHaveTextContent("None");
     expect(screen.getByRole("button", { name: "Stage changes to commit" })).toBeDisabled();
+  });
+
+  it("shows a stopped merge and what undo would do", async () => {
+    vi.mocked(ipc.repoInfo).mockResolvedValue({ ...repoInfo, operation: "merge" });
+    vi.mocked(ipc.journalState).mockResolvedValue({
+      undo: { label: "Commit", blocked: null },
+      redo: null,
+    });
+    useWorkspace.setState({
+      tabs: [{ path: "/work/ronin", name: "ronin" }],
+      active: "/work/ronin",
+    });
+    renderShell();
+
+    const banner = await screen.findByRole("status");
+    expect(banner).toHaveTextContent("A merge is in progress.");
+    expect(within(banner).getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(within(banner).getByRole("button", { name: "Abort" })).toBeInTheDocument();
+    expect(within(banner).queryByRole("button", { name: "Skip commit" })).toBeNull();
+
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Push" })).toBeEnabled();
   });
 });

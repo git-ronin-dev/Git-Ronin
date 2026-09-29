@@ -8,9 +8,11 @@ use std::sync::{Arc, Mutex};
 use ronin_config::{Config, UiPrefs};
 use ronin_git::{
     BlobSource, CommitDetail, CommitOptions, DiffOptions, FileDiff, GitVersion, GraphPage, Hunk,
-    IgnoreScope, LineSelection, PatchTarget, Refs, RepoInfo, StashOptions, StatusEntry,
-    WorkingStatus,
+    IgnoreScope, JournalState, LineSelection, OperationAction, Outcome, PatchTarget, Progress,
+    PullMode, PushOutcome, PushTarget, Refs, RepoInfo, ResetMode, StashOptions, StatusEntry,
+    UndoStyle, WorkingStatus,
 };
+use serde::Serialize;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -22,6 +24,47 @@ pub const REPO_CHANGED: &str = "repo-changed";
 /// Event emitted with the repository path when its index or working tree
 /// change on disk.
 pub const WORKTREE_CHANGED: &str = "worktree-changed";
+/// Event with a progress update from a long-running command.
+pub const PROGRESS: &str = "progress";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProgressEvent {
+    /// The repository path, or the destination of a clone.
+    key: String,
+    message: String,
+    percent: Option<u8>,
+}
+
+/// Forwards progress to the UI as `PROGRESS` events, skipping repeats.
+fn reporter(app: &AppHandle, key: &str) -> impl FnMut(Progress) + use<> {
+    let app = app.clone();
+    let key = key.to_owned();
+    let mut last: Option<Progress> = None;
+    move |progress: Progress| {
+        if last.as_ref() == Some(&progress) {
+            return;
+        }
+        let _ = app.emit(
+            PROGRESS,
+            ProgressEvent {
+                key: key.clone(),
+                message: progress.message.clone(),
+                percent: progress.percent,
+            },
+        );
+        last = Some(progress);
+    }
+}
+
+/// A revision for an undo label: full object ids are abbreviated.
+fn short(rev: &str) -> &str {
+    if rev.len() >= 40 && rev.bytes().all(|b| b.is_ascii_hexdigit()) {
+        &rev[..7]
+    } else {
+        rev
+    }
+}
 
 async fn blocking<T: Send + 'static>(
     app: &AppHandle,
@@ -60,18 +103,38 @@ pub async fn config_set_ui(app: AppHandle, ui: UiPrefs) -> CmdResult<()> {
 /// Opens a repository in a new tab and records it as recent.
 #[tauri::command]
 pub async fn open_repo(app: AppHandle, path: PathBuf) -> CmdResult<RepoInfo> {
+    blocking(&app, move |app, s| open_tab(app, s, &path)).await
+}
+
+/// Clones `url` into `parent/name` and opens it in a new tab.
+#[tauri::command]
+pub async fn clone_repo(
+    app: AppHandle,
+    url: String,
+    parent: PathBuf,
+    name: String,
+) -> CmdResult<RepoInfo> {
     blocking(&app, move |app, s| {
-        let info = start_session(app, s, &path)?;
-        s.config()
-            .update_local(|l| {
-                l.touch_recent(&info.path);
-                if !l.open_tabs.contains(&info.path) {
-                    l.open_tabs.push(info.path.clone());
-                }
-                l.active_tab = Some(info.path.clone());
-            })
+        let key = parent.join(&name).to_string_lossy().into_owned();
+        let dest = ronin_git::clone(s.git()?, &url, &parent, &name, &mut reporter(app, &key))
             .map_err(err)?;
-        Ok(info)
+        open_tab(app, s, &dest)
+    })
+    .await
+}
+
+/// Suggested folder name for a clone of `url`.
+#[tauri::command]
+pub fn clone_name(url: String) -> Option<String> {
+    ronin_git::clone_name(&url)
+}
+
+/// Creates a repository at `path` and opens it in a new tab.
+#[tauri::command]
+pub async fn init_repo(app: AppHandle, path: PathBuf) -> CmdResult<RepoInfo> {
+    blocking(&app, move |app, s| {
+        ronin_git::init(s.git()?, &path).map_err(err)?;
+        open_tab(app, s, &path)
     })
     .await
 }
@@ -350,9 +413,14 @@ pub async fn commit(
     options: CommitOptions,
 ) -> CmdResult<String> {
     blocking(&app, move |_, s| {
-        let oid = ronin_git::commit(s.git()?, &s.session(&repo)?.path, &message, options);
-        s.refs_moved(&repo);
-        oid.map_err(err)
+        let label = if options.amend {
+            "Amend commit"
+        } else {
+            "Commit"
+        };
+        s.journaled(&repo, label, UndoStyle::Soft, |git, path| {
+            ronin_git::commit(git, path, &message, options)
+        })
     })
     .await
 }
@@ -416,6 +484,474 @@ pub async fn add_to_gitignore(
     .await
 }
 
+#[tauri::command]
+pub async fn journal_state(app: AppHandle, repo: String) -> CmdResult<JournalState> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        let mut journal = lock(&session.journal);
+        journal.state(s.git()?, &session.path).map_err(err)
+    })
+    .await
+}
+
+/// Undoes (or with `redo`, redoes) the last action; returns its label.
+#[tauri::command]
+pub async fn undo(app: AppHandle, repo: String, redo: bool) -> CmdResult<String> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        let git = s.git()?;
+        let mut journal = lock(&session.journal);
+        let result = if redo {
+            journal.redo(git, &session.path)
+        } else {
+            journal.undo(git, &session.path)
+        };
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn create_branch(
+    app: AppHandle,
+    repo: String,
+    name: String,
+    start: String,
+    checkout: bool,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let style = if checkout {
+            UndoStyle::Checkout
+        } else {
+            UndoStyle::Keep
+        };
+        s.journaled(
+            &repo,
+            format!("Create branch {name}"),
+            style,
+            |git, path| ronin_git::create_branch(git, path, &name, &start, checkout),
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn checkout_branch(app: AppHandle, repo: String, name: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        s.journaled(
+            &repo,
+            format!("Check out {name}"),
+            UndoStyle::Checkout,
+            |git, path| ronin_git::checkout_branch(git, path, &name),
+        )
+    })
+    .await
+}
+
+/// Creates local branch `name` tracking `remote_ref` and checks it out.
+#[tauri::command]
+pub async fn checkout_remote_branch(
+    app: AppHandle,
+    repo: String,
+    remote_ref: String,
+    name: String,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        s.journaled(
+            &repo,
+            format!("Check out {name}"),
+            UndoStyle::Checkout,
+            |git, path| ronin_git::checkout_remote_branch(git, path, &remote_ref, &name),
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn checkout_detached(app: AppHandle, repo: String, rev: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let label = format!("Check out {}", short(&rev));
+        s.journaled(&repo, label, UndoStyle::Checkout, |git, path| {
+            ronin_git::checkout_detached(git, path, &rev)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn rename_branch(
+    app: AppHandle,
+    repo: String,
+    old: String,
+    new: String,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        let mut journal = lock(&session.journal);
+        let result = ronin_git::rename_branch(s.git()?, &session.path, &old, &new);
+        s.refs_moved(&repo);
+        result.map_err(err)?;
+        journal.record_rename(format!("Rename {old} to {new}"), &old, &new);
+        Ok(())
+    })
+    .await
+}
+
+/// Deletes a local branch. Without `force`, an unmerged branch fails with a
+/// message containing "not fully merged".
+#[tauri::command]
+pub async fn delete_branch(
+    app: AppHandle,
+    repo: String,
+    name: String,
+    force: bool,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        s.journaled(
+            &repo,
+            format!("Delete branch {name}"),
+            UndoStyle::Keep,
+            |git, path| ronin_git::delete_branch(git, path, &name, force),
+        )
+    })
+    .await
+}
+
+/// Points branch `name` (not checked out) at `rev`.
+#[tauri::command]
+pub async fn move_branch(app: AppHandle, repo: String, name: String, rev: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let label = format!("Move {name} to {}", short(&rev));
+        s.journaled(&repo, label, UndoStyle::Keep, |git, path| {
+            ronin_git::move_branch(git, path, &name, &rev)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn set_upstream(
+    app: AppHandle,
+    repo: String,
+    name: String,
+    upstream: Option<String>,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let result = ronin_git::set_upstream(
+            s.git()?,
+            &s.session(&repo)?.path,
+            &name,
+            upstream.as_deref(),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn create_tag(
+    app: AppHandle,
+    repo: String,
+    name: String,
+    target: String,
+    message: Option<String>,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        s.journaled(
+            &repo,
+            format!("Create tag {name}"),
+            UndoStyle::Keep,
+            |git, path| ronin_git::create_tag(git, path, &name, &target, message.as_deref()),
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_tag(app: AppHandle, repo: String, name: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        s.journaled(
+            &repo,
+            format!("Delete tag {name}"),
+            UndoStyle::Keep,
+            |git, path| ronin_git::delete_tag(git, path, &name),
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn add_remote(app: AppHandle, repo: String, name: String, url: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let result = ronin_git::add_remote(s.git()?, &s.session(&repo)?.path, &name, &url);
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn edit_remote(
+    app: AppHandle,
+    repo: String,
+    name: String,
+    new_name: String,
+    url: String,
+    push_url: Option<String>,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let result = ronin_git::edit_remote(
+            s.git()?,
+            &s.session(&repo)?.path,
+            &name,
+            &new_name,
+            &url,
+            push_url.as_deref(),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_remote(app: AppHandle, repo: String, name: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let result = ronin_git::remove_remote(s.git()?, &s.session(&repo)?.path, &name);
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+/// Fetches `remote`, or all remotes. `background` fetches (auto-fetch)
+/// never prompt for credentials.
+#[tauri::command]
+pub async fn fetch(
+    app: AppHandle,
+    repo: String,
+    remote: Option<String>,
+    background: bool,
+) -> CmdResult<()> {
+    blocking(&app, move |app, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let git = if background {
+            s.background_git()?
+        } else {
+            s.git()?.clone()
+        };
+        let mut report = reporter(app, &repo);
+        let mut quiet = |_| {};
+        let progress: &mut dyn FnMut(Progress) = if background { &mut quiet } else { &mut report };
+        let result = ronin_git::fetch(&git, &session.path, remote.as_deref(), progress);
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn pull(app: AppHandle, repo: String, mode: PullMode) -> CmdResult<Outcome> {
+    blocking(&app, move |app, s| {
+        let mut report = reporter(app, &repo);
+        s.journaled(&repo, "Pull", UndoStyle::Keep, |git, path| {
+            ronin_git::pull(git, path, mode, &mut report)
+        })
+    })
+    .await
+}
+
+/// Pushes branch `name` to its upstream, or to `target` (which becomes its
+/// upstream). Fails with "has no upstream branch" when it has none and no
+/// target is given. `force_over` forces the push while the remote branch
+/// is still at that commit.
+#[tauri::command]
+pub async fn push_branch(
+    app: AppHandle,
+    repo: String,
+    name: String,
+    target: Option<PushTarget>,
+    force_over: Option<String>,
+) -> CmdResult<PushOutcome> {
+    blocking(&app, move |app, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::push_branch(
+            s.git()?,
+            &session.path,
+            &name,
+            target.as_ref(),
+            force_over.as_deref(),
+            &mut reporter(app, &repo),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn push_tag(
+    app: AppHandle,
+    repo: String,
+    remote: String,
+    name: String,
+) -> CmdResult<PushOutcome> {
+    blocking(&app, move |app, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::push_tag(
+            s.git()?,
+            &session.path,
+            &remote,
+            &name,
+            &mut reporter(app, &repo),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+/// Deletes a branch or tag (`full_ref`) on `remote`.
+#[tauri::command]
+pub async fn delete_remote_ref(
+    app: AppHandle,
+    repo: String,
+    remote: String,
+    full_ref: String,
+) -> CmdResult<()> {
+    blocking(&app, move |app, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::delete_remote_ref(
+            s.git()?,
+            &session.path,
+            &remote,
+            &full_ref,
+            &mut reporter(app, &repo),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn merge(app: AppHandle, repo: String, rev: String, no_ff: bool) -> CmdResult<Outcome> {
+    blocking(&app, move |_, s| {
+        let label = format!("Merge {}", short(&rev));
+        s.journaled(&repo, label, UndoStyle::Keep, |git, path| {
+            ronin_git::merge(git, path, &rev, no_ff)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn rebase(app: AppHandle, repo: String, onto: String) -> CmdResult<Outcome> {
+    blocking(&app, move |_, s| {
+        let label = format!("Rebase onto {}", short(&onto));
+        s.journaled(&repo, label, UndoStyle::Keep, |git, path| {
+            ronin_git::rebase(git, path, &onto)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn cherry_pick(app: AppHandle, repo: String, oid: String) -> CmdResult<Outcome> {
+    blocking(&app, move |_, s| {
+        let label = format!("Cherry-pick {}", short(&oid));
+        s.journaled(&repo, label, UndoStyle::Keep, |git, path| {
+            ronin_git::cherry_pick(git, path, &oid)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn revert(app: AppHandle, repo: String, oid: String) -> CmdResult<Outcome> {
+    blocking(&app, move |_, s| {
+        let label = format!("Revert {}", short(&oid));
+        s.journaled(&repo, label, UndoStyle::Keep, |git, path| {
+            ronin_git::revert(git, path, &oid)
+        })
+    })
+    .await
+}
+
+/// Moves the current branch to `rev`.
+#[tauri::command]
+pub async fn reset(app: AppHandle, repo: String, rev: String, mode: ResetMode) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let (style, kind) = match mode {
+            ResetMode::Soft => (UndoStyle::Soft, "Soft"),
+            ResetMode::Mixed => (UndoStyle::Mixed, "Mixed"),
+            // Undo restores the commits; the discarded changes are gone.
+            ResetMode::Hard => (UndoStyle::Keep, "Hard"),
+        };
+        let label = format!("{kind} reset to {}", short(&rev));
+        s.journaled(&repo, label, style, |git, path| {
+            ronin_git::reset(git, path, &rev, mode)
+        })
+    })
+    .await
+}
+
+/// Continues, skips or aborts the merge, rebase, … in progress.
+#[tauri::command]
+pub async fn resolve_operation(
+    app: AppHandle,
+    repo: String,
+    action: OperationAction,
+) -> CmdResult<Outcome> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::resolve_operation(s.git()?, &session.path, action);
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+/// The message prepared for the commit that concludes a stopped merge,
+/// cherry-pick or revert.
+#[tauri::command]
+pub async fn pending_message(app: AppHandle, repo: String) -> CmdResult<Option<String>> {
+    blocking(&app, move |_, s| {
+        ronin_git::pending_message(&s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+/// Answers a `credential-request`; `None` cancels it.
+#[tauri::command]
+pub fn credential_respond(state: tauri::State<'_, AppState>, id: u64, answer: Option<String>) {
+    if let Some(askpass) = &state.askpass {
+        askpass.respond(id, answer);
+    }
+}
+
+/// Opens (or reuses) the session for `path` in a tab and records it as recent.
+fn open_tab(app: &AppHandle, s: &AppState, path: &Path) -> CmdResult<RepoInfo> {
+    let info = start_session(app, s, path)?;
+    s.config()
+        .update_local(|l| {
+            l.touch_recent(&info.path);
+            if !l.open_tabs.contains(&info.path) {
+                l.open_tabs.push(info.path.clone());
+            }
+            l.active_tab = Some(info.path.clone());
+        })
+        .map_err(err)?;
+    Ok(info)
+}
+
 /// Opens (or reuses) the session for the repository containing `path`.
 fn start_session(app: &AppHandle, state: &AppState, path: &Path) -> CmdResult<RepoInfo> {
     let info = ronin_git::open_repo(path).map_err(err)?;
@@ -442,6 +978,7 @@ fn start_session(app: &AppHandle, state: &AppState, path: &Path) -> CmdResult<Re
             RepoSession {
                 path: PathBuf::from(&info.path),
                 graph: Mutex::new(None),
+                journal: Mutex::new(Default::default()),
                 _watcher: watcher,
             }
         });

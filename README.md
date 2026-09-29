@@ -9,7 +9,7 @@ work exactly as they do on the command line.
 
 ## Status
 
-Viewer and working copy (phases 1 and 2 of the roadmap):
+Phases 1 to 3 of the roadmap:
 
 - Repository tabs, restored between sessions, and a recent list
 - Commit graph for all branches, remotes and tags; opens instantly and loads
@@ -25,8 +25,19 @@ Viewer and working copy (phases 1 and 2 of the roadmap):
   pop or delete stashes
 - Refreshes by itself when the repository or its files change outside the
   app; ignored directories such as `node_modules` are not watched
+- Branches and tags: create, check out, rename, delete, set upstream;
+  push and delete tags on remotes
+- Remotes: add, edit, remove; fetch (and auto-fetch), pull (merge, rebase
+  or fast-forward only), push, with a safe force push when rejected
+- Clone with progress, or create a new repository
+- Drag a branch onto another to merge, rebase, reset or push it
+- Cherry-pick, revert, reset and detached checkout from the commit menu;
+  continue, skip or abort a merge or rebase that stopped on conflicts
+- Undo and redo (Ctrl+Z / Ctrl+Shift+Z), never rewriting pushed commits
+- Credential helpers work as usual; otherwise the app asks for the
+  username, password or SSH passphrase itself
 
-Branching and remote operations come next.
+The merge conflict editor, interactive rebase and blame come next.
 
 ## Layout
 

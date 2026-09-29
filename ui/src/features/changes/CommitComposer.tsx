@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ipc } from "../../lib/ipc";
 import { Button } from "../../ui/Button";
 import { toast } from "../../ui/toast-store";
+import { usePendingMessage } from "../ops/queries";
 import { invalidateRepo, keys, useRepoInfo } from "../workspace/queries";
 import { updateView } from "../workspace/view";
 import { composeMessage, splitMessage, useDraft, useDrafts } from "./draft";
@@ -22,19 +23,26 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
   const client = useQueryClient();
   const draft = useDraft(repo);
   const { update, clear } = useDrafts.getState();
-  const head = useRepoInfo(repo).data?.head;
+  const info = useRepoInfo(repo).data;
+  const head = info?.head;
   const unborn = head?.kind === "branch" && head.unborn;
+  const operation = info?.operation ?? null;
+  // A commit concludes a stopped merge, cherry-pick or revert.
+  const concludes = operation === "merge" || operation === "cherryPick" || operation === "revert";
   const [busy, setBusy] = useState(false);
+  usePrefill(repo, concludes);
 
   const message = composeMessage(draft);
   const blocker =
-    conflicts > 0
-      ? "Resolve conflicts first"
-      : !draft.amend && stagedCount === 0
-        ? "Stage changes to commit"
-        : !message
-          ? "Write a summary"
-          : null;
+    operation !== null && !concludes
+      ? "Use Continue above to go on"
+      : conflicts > 0
+        ? "Resolve conflicts first"
+        : !draft.amend && stagedCount === 0
+          ? "Stage changes to commit"
+          : !message
+            ? "Write a summary"
+            : null;
 
   const headMessage = () =>
     client.fetchQuery({
@@ -123,7 +131,7 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
           <input
             type="checkbox"
             checked={draft.amend}
-            disabled={unborn}
+            disabled={unborn || operation !== null}
             onChange={(e) => void toggleAmend(e.target.checked)}
           />
           Amend previous commit
@@ -156,4 +164,18 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
       </Button>
     </form>
   );
+}
+
+/** Starts the message of a commit that concludes a merge (etc.) from the one git prepared. */
+function usePrefill(repo: string, enabled: boolean) {
+  const pending = usePendingMessage(repo, enabled).data;
+  const used = useRef<string | null>(null);
+  useEffect(() => {
+    if (!enabled || !pending || used.current === pending) return;
+    used.current = pending;
+    const draft = useDrafts.getState().drafts[repo];
+    if (!draft?.summary.trim() && !draft?.body.trim()) {
+      useDrafts.getState().update(repo, splitMessage(pending));
+    }
+  }, [repo, enabled, pending]);
 }

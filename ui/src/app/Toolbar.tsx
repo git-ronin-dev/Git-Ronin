@@ -3,6 +3,7 @@ import {
   ArchiveRestore,
   ArrowDownToLine,
   ArrowUpFromLine,
+  ChevronDown,
   GitBranchPlus,
   PanelLeft,
   PanelRight,
@@ -11,13 +12,21 @@ import {
   Undo2,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { forwardRef, useState, type ComponentProps } from "react";
 
+import type { PullMode } from "../bindings/PullMode";
 import { countChanges, useWorkingStatus } from "../features/changes/queries";
+import { PULL_LABELS, useGitActions } from "../features/ops/actions";
+import { openDialog } from "../features/ops/dialogs";
+import { useJournal } from "../features/ops/queries";
+import { useTask } from "../features/ops/tasks";
+import { describeHead } from "../features/repo/head";
 import { useStashActions } from "../features/stash/actions";
 import { StashDialog } from "../features/stash/StashDialog";
-import { useRefs } from "../features/workspace/queries";
+import { useRefs, useRepoInfo } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
+import { DropdownMenu } from "../ui/DropdownMenu";
+import { toast } from "../ui/toast-store";
 import { Tooltip } from "../ui/Tooltip";
 
 interface ToolbarProps {
@@ -28,8 +37,6 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }: ToolbarProps) {
-  // Undo, pull, push and branch arrive in Phase 3.
-  const actionsDisabled = true;
   const active = useWorkspace((s) => s.active);
 
   return (
@@ -40,17 +47,17 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
       </div>
 
       <div className="flex items-center gap-1">
-        <ToolButton icon={Undo2} label="Undo" disabled={actionsDisabled} showLabel />
-        <ToolButton icon={Redo2} label="Redo" disabled={actionsDisabled} showLabel />
-        <Divider />
-        <ToolButton icon={ArrowDownToLine} label="Pull" disabled={actionsDisabled} showLabel />
-        <ToolButton icon={ArrowUpFromLine} label="Push" disabled={actionsDisabled} showLabel />
-        <Divider />
-        <ToolButton icon={GitBranchPlus} label="Branch" disabled={actionsDisabled} showLabel />
         {active ? (
-          <StashButtons key={active} repo={active} />
+          <RepoButtons key={active} repo={active} />
         ) : (
           <>
+            <ToolButton icon={Undo2} label="Undo" disabled showLabel />
+            <ToolButton icon={Redo2} label="Redo" disabled showLabel />
+            <Divider />
+            <ToolButton icon={ArrowDownToLine} label="Pull" disabled showLabel />
+            <ToolButton icon={ArrowUpFromLine} label="Push" disabled showLabel />
+            <Divider />
+            <ToolButton icon={GitBranchPlus} label="Branch" disabled showLabel />
             <ToolButton icon={Archive} label="Stash" disabled showLabel />
             <ToolButton icon={ArchiveRestore} label="Pop" disabled showLabel />
           </>
@@ -70,6 +77,126 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
     </header>
   );
 }
+
+function RepoButtons({ repo }: { repo: string }) {
+  const actions = useGitActions(repo);
+  const journal = useJournal(repo).data;
+  const info = useRepoInfo(repo).data;
+  const refs = useRefs(repo).data;
+  const busy = useTask(repo) !== undefined;
+  const current = refs?.local.find((b) => b.isHead);
+  const upstream = current?.upstream?.name ?? null;
+  const hasRemotes = (refs?.remotes.length ?? 0) > 0;
+  const unborn = info?.head.kind === "branch" && info.head.unborn;
+
+  const stepTooltip = (verb: string, step = journal?.undo) =>
+    step ? (step.blocked ?? `${verb} “${step.label}”`) : `Nothing to ${verb.toLowerCase()}`;
+  const pull = (mode: PullMode) => void actions.pull(mode);
+  const pullMenu = [
+    { label: "Fetch all remotes", disabled: !hasRemotes, onSelect: () => void actions.fetch(null) },
+    "separator" as const,
+    ...(["fastForwardOnly", "merge", "rebase"] as const).map((mode) => ({
+      label: PULL_LABELS[mode],
+      disabled: !upstream,
+      onSelect: () => pull(mode),
+    })),
+  ];
+
+  return (
+    <>
+      <ToolButton
+        icon={Undo2}
+        label="Undo"
+        tooltip={stepTooltip("Undo")}
+        shortcut="Ctrl+Z"
+        // A blocked step stays clickable so it can say why.
+        disabled={!journal?.undo}
+        onClick={() =>
+          journal?.undo?.blocked
+            ? toast.info(`Can't undo “${journal.undo.label}”`, journal.undo.blocked)
+            : void actions.undo(false)
+        }
+        showLabel
+      />
+      <ToolButton
+        icon={Redo2}
+        label="Redo"
+        tooltip={stepTooltip("Redo", journal?.redo)}
+        shortcut="Ctrl+Shift+Z"
+        disabled={!journal?.redo}
+        onClick={() => void actions.undo(true)}
+        showLabel
+      />
+      <Divider />
+      <div className="flex items-center">
+        <ToolButton
+          icon={ArrowDownToLine}
+          label="Pull"
+          tooltip={
+            upstream
+              ? `Pull ${upstream} into ${current!.name}`
+              : "The current branch has no upstream"
+          }
+          disabled={!upstream || busy}
+          onClick={() => pull("default")}
+          showLabel
+        />
+        <DropdownMenu items={pullMenu}>
+          <MenuCaret aria-label="More pull and fetch options" disabled={busy} />
+        </DropdownMenu>
+      </div>
+      <ToolButton
+        icon={ArrowUpFromLine}
+        label="Push"
+        tooltip={
+          !current
+            ? "Check out a branch to push it"
+            : !hasRemotes
+              ? "Add a remote to push to"
+              : upstream
+                ? `Push ${current.name} to ${upstream}`
+                : `Push ${current.name}…`
+        }
+        disabled={!current || !hasRemotes || busy}
+        onClick={() => current && void actions.push(current.name, upstream)}
+        showLabel
+      />
+      <Divider />
+      <ToolButton
+        icon={GitBranchPlus}
+        label="Branch"
+        tooltip="Create a branch at the current commit"
+        disabled={!info || unborn}
+        onClick={() =>
+          info &&
+          openDialog({
+            kind: "createBranch",
+            repo,
+            start: "HEAD",
+            startLabel: describeHead(info.head),
+          })
+        }
+        showLabel
+      />
+      <StashButtons repo={repo} />
+    </>
+  );
+}
+
+const MenuCaret = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
+  function MenuCaret(props, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        {...props}
+        className="flex h-10 w-4 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+      >
+        <ChevronDown className="size-3" />
+      </button>
+    );
+  },
+);
 
 function StashButtons({ repo }: { repo: string }) {
   const [open, setOpen] = useState(false);

@@ -1,6 +1,7 @@
 // Prevents an extra console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod askpass;
 mod commands;
 mod state;
 mod watcher;
@@ -11,12 +12,18 @@ use tauri::Manager;
 use crate::state::AppState;
 
 fn main() {
+    // Started by git or ssh to ask for a credential: answer and exit.
+    if let Some(code) = askpass::client() {
+        std::process::exit(code);
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             let (config, warnings) = ConfigStore::load(dir);
-            app.manage(AppState::new(config, warnings));
+            let askpass = askpass::Askpass::start(app.handle().clone()).ok();
+            app.manage(AppState::new(config, warnings, askpass));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -50,6 +57,37 @@ fn main() {
             commands::stash_apply,
             commands::stash_drop,
             commands::add_to_gitignore,
+            commands::clone_repo,
+            commands::clone_name,
+            commands::init_repo,
+            commands::journal_state,
+            commands::undo,
+            commands::create_branch,
+            commands::checkout_branch,
+            commands::checkout_remote_branch,
+            commands::checkout_detached,
+            commands::rename_branch,
+            commands::delete_branch,
+            commands::move_branch,
+            commands::set_upstream,
+            commands::create_tag,
+            commands::delete_tag,
+            commands::add_remote,
+            commands::edit_remote,
+            commands::remove_remote,
+            commands::fetch,
+            commands::pull,
+            commands::push_branch,
+            commands::push_tag,
+            commands::delete_remote_ref,
+            commands::merge,
+            commands::rebase,
+            commands::cherry_pick,
+            commands::revert,
+            commands::reset,
+            commands::resolve_operation,
+            commands::pending_message,
+            commands::credential_respond,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Git Ronin");

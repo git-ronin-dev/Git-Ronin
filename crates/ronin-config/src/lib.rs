@@ -33,6 +33,23 @@ pub struct Config {
 #[ts(export)]
 pub struct Portable {
     pub ui: UiPrefs,
+    pub git: GitPrefs,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct GitPrefs {
+    /// Fetch every remote of each open repository this often; 0 turns it off.
+    pub auto_fetch_minutes: u32,
+}
+
+impl Default for GitPrefs {
+    fn default() -> Self {
+        Self {
+            auto_fetch_minutes: 10,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

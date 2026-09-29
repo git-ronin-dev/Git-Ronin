@@ -15,7 +15,22 @@ export function Dialog({ open, onOpenChange, title, children, footer }: DialogPr
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-40 bg-canvas/70" />
-        <RadixDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[min(480px,90vw)] -translate-1/2 rounded-lg border border-line bg-surface p-5 shadow-2xl">
+        <RadixDialog.Content
+          onOpenAutoFocus={(e) => {
+            // Radix would focus the first tabbable element: the close
+            // button, which Enter would then press.
+            const content = e.currentTarget as HTMLElement;
+            if (content.contains(document.activeElement)) return;
+            const target = content.querySelector<HTMLElement>(
+              "input:not([type=hidden]):not([type=checkbox]), select, textarea, [data-primary]",
+            );
+            if (target) {
+              e.preventDefault();
+              target.focus();
+            }
+          }}
+          className="fixed top-1/2 left-1/2 z-50 w-[min(480px,90vw)] -translate-1/2 rounded-lg border border-line bg-surface p-5 shadow-2xl"
+        >
           <div className="mb-3 flex items-center justify-between">
             <RadixDialog.Title className="text-base font-semibold">{title}</RadixDialog.Title>
             <RadixDialog.Close aria-label="Close" className="text-fg-muted hover:text-fg">

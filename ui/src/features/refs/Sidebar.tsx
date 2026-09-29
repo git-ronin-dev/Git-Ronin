@@ -9,6 +9,7 @@ import {
   EyeOff,
   Folder as FolderIcon,
   GitBranch,
+  Plus,
   Search,
   Tag,
 } from "lucide-react";
@@ -19,7 +20,13 @@ import { ipc } from "../../lib/ipc";
 import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
 import { Section } from "../../ui/Section";
 import { toast } from "../../ui/toast-store";
+import { Tooltip } from "../../ui/Tooltip";
 import { revealCommit } from "../graph/reveal";
+import { useGitActions } from "../ops/actions";
+import { openDialog } from "../ops/dialogs";
+import { beginDrag, dropProps, useDrag, type DragRef } from "../ops/drag";
+import { localBranchMenu, remoteBranchMenu, remoteMenu, tagMenu } from "../ops/menus";
+import { useRepoContext } from "../ops/queries";
 import { useStashActions } from "../stash/actions";
 import { invalidateRepo, keys, useConfig, useRefs } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";
@@ -36,6 +43,11 @@ interface RefItem {
   ahead?: number;
   behind?: number;
   gone?: boolean;
+  /** Git actions, shown above the graph filter items. */
+  menu: MenuItem[];
+  /** Branches can be dragged onto each other. */
+  drag?: DragRef;
+  onDoubleClick?: () => void;
 }
 
 export function Sidebar({ repo }: { repo: string }) {
@@ -43,6 +55,8 @@ export function Sidebar({ repo }: { repo: string }) {
   const [filter, setFilter] = useState("");
   const graphFilter = useGraphFilter(repo);
   const stashActions = useStashActions(repo);
+  const actions = useGitActions(repo);
+  const ctx = useRepoContext(repo);
 
   if (refs.isError) return <p className="p-3 text-danger">{String(refs.error)}</p>;
   if (!refs.data) return null;
@@ -59,8 +73,13 @@ export function Sidebar({ repo }: { repo: string }) {
       ahead: b.upstream?.ahead,
       behind: b.upstream?.behind,
       gone: b.upstream?.gone,
+      menu: localBranchMenu(actions, ctx, b),
+      drag: { kind: "local", name: b.name, fullName: b.fullName, oid: b.oid },
+      onDoubleClick: b.isHead ? undefined : () => void actions.checkout(b.name),
     }));
-  const tagItems: RefItem[] = tags.filter((t) => match(t.name));
+  const tagItems: RefItem[] = tags
+    .filter((t) => match(t.name))
+    .map((t) => ({ ...t, menu: tagMenu(actions, ctx, t) }));
 
   return (
     <nav aria-label="Repository" className="flex h-full flex-col">
@@ -90,15 +109,48 @@ export function Sidebar({ repo }: { repo: string }) {
         <Section title="Local" icon={<GitBranch className={icon} />} count={local.length}>
           <RefTree repo={repo} items={localItems} filter={graphFilter} depth={1} />
         </Section>
-        <Section title="Remote" icon={<Cloud className={icon} />} count={remotes.length}>
+        <Section
+          title="Remote"
+          icon={<Cloud className={icon} />}
+          count={remotes.length}
+          action={
+            <Tooltip content="Add remote">
+              <button
+                type="button"
+                aria-label="Add remote"
+                onClick={() => openDialog({ kind: "remote", repo, remote: null })}
+                className="rounded-sm text-fg-faint opacity-0 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100"
+              >
+                <Plus className={icon} />
+              </button>
+            </Tooltip>
+          }
+        >
           {remotes.map((remote) => {
-            const items = remote.branches.filter((b) => match(`${remote.name}/${b.name}`));
+            const items: RefItem[] = remote.branches
+              .filter((b) => match(`${remote.name}/${b.name}`))
+              .map((b) => ({
+                ...b,
+                menu: remoteBranchMenu(actions, ctx, remote.name, b),
+                drag: {
+                  kind: "remote",
+                  name: `${remote.name}/${b.name}`,
+                  fullName: b.fullName,
+                  oid: b.oid,
+                  remote: remote.name,
+                  branch: b.name,
+                },
+                onDoubleClick: () =>
+                  void actions.checkoutRemote(b.fullName, b.name, ctx.localNames),
+              }));
             return (
               <Folder
                 key={remote.name}
                 name={remote.name}
                 depth={1}
                 icon={<Cloud className={icon} />}
+                title={remote.url ?? undefined}
+                menu={remoteMenu(actions, ctx, remote)}
               >
                 <RefTree repo={repo} items={items} filter={graphFilter} depth={2} />
               </Folder>
@@ -239,7 +291,10 @@ function RefLeaf({
 }) {
   const hidden = filter.hidden.has(item.fullName);
   const solo = filter.solo.has(item.fullName);
+  const over = useDrag((s) => s.over !== null && s.over === item.fullName);
   const menu: MenuItem[] = [
+    ...item.menu,
+    ...(item.menu.length > 0 ? (["separator"] as const) : []),
     {
       label: hidden ? "Show in graph" : "Hide in graph",
       onSelect: () => filter.toggleHidden(item.fullName),
@@ -253,6 +308,10 @@ function RefLeaf({
       <Leaf
         depth={depth}
         onClick={() => void revealCommit(repo, item.oid)}
+        onDoubleClick={item.onDoubleClick}
+        onPointerDown={item.drag ? (e) => beginDrag(repo, item.drag!, e) : undefined}
+        {...(item.drag ? dropProps(item.drag) : {})}
+        highlighted={over}
         dimmed={hidden || (filter.solo.size > 0 && !solo)}
         trailing={
           <button
@@ -314,29 +373,37 @@ function Folder({
   name,
   depth,
   icon: folderIcon,
+  title,
+  menu,
   children,
 }: {
   name: string;
   depth: number;
   icon: ReactNode;
+  title?: string;
+  menu?: MenuItem[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(true);
+  const button = (
+    <button
+      type="button"
+      aria-expanded={open}
+      title={title}
+      onClick={() => setOpen(!open)}
+      style={indent(depth - 1)}
+      className="flex h-7 w-full items-center gap-1.5 pr-3 text-fg-muted hover:bg-hover hover:text-fg"
+    >
+      <ChevronRight
+        className={clsx("size-3.5 shrink-0 transition-transform", open && "rotate-90")}
+      />
+      {folderIcon}
+      <span className="truncate">{name}</span>
+    </button>
+  );
   return (
     <div>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        style={indent(depth - 1)}
-        className="flex h-7 w-full items-center gap-1.5 pr-3 text-fg-muted hover:bg-hover hover:text-fg"
-      >
-        <ChevronRight
-          className={clsx("size-3.5 shrink-0 transition-transform", open && "rotate-90")}
-        />
-        {folderIcon}
-        <span className="truncate">{name}</span>
-      </button>
+      {menu ? <ContextMenu items={menu}>{button}</ContextMenu> : button}
       {open && children}
     </div>
   );
@@ -348,6 +415,7 @@ function Leaf({
   title,
   onClick,
   dimmed,
+  highlighted,
   trailing,
   children,
   ...rest
@@ -356,6 +424,8 @@ function Leaf({
   title?: string;
   onClick: () => void;
   dimmed?: boolean;
+  /** A dragged branch is over it. */
+  highlighted?: boolean;
   trailing?: ReactNode;
   children: ReactNode;
 } & Omit<ComponentProps<"div">, "onClick" | "title" | "children">) {
@@ -371,6 +441,7 @@ function Leaf({
       className={clsx(
         "group flex h-7 cursor-default items-center gap-2 pr-3 hover:bg-hover",
         dimmed && "opacity-45",
+        highlighted && "bg-accent/20 outline outline-1 -outline-offset-1 outline-accent",
       )}
     >
       {children}

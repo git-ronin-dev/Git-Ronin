@@ -6,6 +6,7 @@ import { WorkingDiffPanel } from "../features/changes/WorkingDiffPanel";
 import { CommitPanel } from "../features/commit/CommitPanel";
 import { DiffPanel } from "../features/commit/DiffPanel";
 import { GraphView } from "../features/graph/GraphView";
+import { OperationBanner } from "../features/ops/OperationBanner";
 import { Sidebar } from "../features/refs/Sidebar";
 import { useWorkspace } from "../features/workspace/store";
 import { WORKING_COPY, updateView, useRepoView } from "../features/workspace/view";
@@ -85,17 +86,20 @@ export function AppShell() {
 function RepoMain({ repo }: { repo: string }) {
   const { openFile } = useRepoView(repo);
   return (
-    <>
-      <div className={clsx("h-full", openFile && "hidden")}>
-        <GraphView repo={repo} />
+    <div className="flex h-full flex-col">
+      <OperationBanner repo={repo} />
+      <div className="min-h-0 flex-1">
+        <div className={clsx("h-full", openFile && "hidden")}>
+          <GraphView repo={repo} />
+        </div>
+        {openFile?.kind === "commit" && (
+          <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />
+        )}
+        {openFile?.kind === "working" && (
+          <WorkingDiffPanel repo={repo} path={openFile.path} staged={openFile.staged} />
+        )}
       </div>
-      {openFile?.kind === "commit" && (
-        <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />
-      )}
-      {openFile?.kind === "working" && (
-        <WorkingDiffPanel repo={repo} path={openFile.path} staged={openFile.staged} />
-      )}
-    </>
+    </div>
   );
 }
 

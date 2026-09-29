@@ -23,6 +23,7 @@ export function Button({
   return (
     <button
       type={type}
+      data-primary={variant === "primary" ? "" : undefined}
       className={clsx(
         "inline-flex h-7 items-center gap-1.5 rounded-md px-3 font-medium transition-colors",
         "disabled:pointer-events-none disabled:opacity-40",

@@ -10,6 +10,9 @@ import { formatDate, relativeTime } from "../../lib/time";
 import { Avatar } from "../../ui/Avatar";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { countChanges, useWorkingStatus } from "../changes/queries";
+import { useGitActions, type GitActions } from "../ops/actions";
+import { commitMenu, type RepoContext } from "../ops/menus";
+import { useRepoContext } from "../ops/queries";
 import { keys, useRepoInfo, useUiPrefs } from "../workspace/queries";
 import { WORKING_COPY, updateView, useRepoView, type Search } from "../workspace/view";
 import { LANE_WIDTH, ROW_HEIGHT } from "./geometry";
@@ -33,6 +36,8 @@ export function GraphView({ repo }: { repo: string }) {
   const [range, setRange] = useState({ first: 0, last: 60 });
   const rows = useGraphRows(repo, range.first, range.last);
   const info = useRepoInfo(repo).data;
+  const ctx = useRepoContext(repo);
+  const actions = useGitActions(repo);
   const status = useWorkingStatus(repo, info !== undefined && !info.isBare);
   const changes = countChanges(status.data);
   // The uncommitted-changes row sits above the first commit.
@@ -176,6 +181,8 @@ export function GraphView({ repo }: { repo: string }) {
                       dimmed={dimming && !matchSet.has(item.index)}
                       showAvatars={showAvatars}
                       onSelect={select}
+                      ctx={ctx}
+                      actions={actions}
                     />
                   ) : (
                     <Placeholder graphWidth={graphWidth} />
@@ -207,6 +214,8 @@ interface RowProps {
   dimmed: boolean;
   showAvatars: boolean;
   onSelect: (oid: string) => void;
+  ctx: RepoContext;
+  actions: GitActions;
 }
 
 const Row = memo(function Row({
@@ -216,10 +225,14 @@ const Row = memo(function Row({
   dimmed,
   showAvatars,
   onSelect,
+  ctx,
+  actions,
 }: RowProps) {
   return (
     <ContextMenu
       items={[
+        ...commitMenu(actions, ctx, row.oid),
+        "separator",
         { label: "Copy commit SHA", onSelect: () => void copyText(row.oid, "Copied commit SHA") },
         { label: "Copy message", onSelect: () => void copyText(row.summary, "Copied message") },
       ]}
@@ -238,7 +251,7 @@ const Row = memo(function Row({
           <GraphLanes row={row} width={graphWidth} />
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
-          <RefChips refs={row.refs} lane={row.lane} />
+          <RefChips refs={row.refs} lane={row.lane} oid={row.oid} ctx={ctx} actions={actions} />
           <span className="truncate">{row.summary}</span>
         </div>
         <div className="hidden w-44 min-w-0 items-center gap-2 px-2 text-fg-muted @2xl:flex">
