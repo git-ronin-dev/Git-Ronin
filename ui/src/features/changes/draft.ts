@@ -6,9 +6,17 @@ export interface CommitDraft {
   body: string;
   amend: boolean;
   signoff: boolean;
+  /** Skip the pre-commit and commit-msg hooks. */
+  noVerify: boolean;
 }
 
-export const emptyDraft: CommitDraft = { summary: "", body: "", amend: false, signoff: false };
+export const emptyDraft: CommitDraft = {
+  summary: "",
+  body: "",
+  amend: false,
+  signoff: false,
+  noVerify: false,
+};
 
 interface DraftState {
   drafts: Record<string, CommitDraft>;

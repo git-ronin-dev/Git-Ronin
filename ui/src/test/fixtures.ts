@@ -9,6 +9,7 @@ export const repoInfo: RepoInfo = {
   isBare: false,
   head: { kind: "branch", name: "main", unborn: false },
   operation: null,
+  rebase: null,
 };
 
 export const config: Config = {
@@ -27,6 +28,7 @@ export const refs: Refs = {
       oid: "a".repeat(40),
       isHead: true,
       upstream: { name: "origin/main", ahead: 2, behind: 0, gone: false },
+      worktree: null,
     },
     {
       name: "feature/login",
@@ -34,6 +36,7 @@ export const refs: Refs = {
       oid: "b".repeat(40),
       isHead: false,
       upstream: null,
+      worktree: null,
     },
   ],
   remotes: [

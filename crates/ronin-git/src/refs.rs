@@ -4,7 +4,8 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::repo::discover;
-use crate::{GitCli, Result};
+use crate::submodule::submodule_states;
+use crate::{GitCli, Result, SubmoduleState};
 
 #[derive(Debug, Clone, Default, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +27,8 @@ pub struct LocalBranch {
     pub oid: String,
     pub is_head: bool,
     pub upstream: Option<Upstream>,
+    /// Checked out in another working tree, at this path.
+    pub worktree: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -86,10 +89,11 @@ pub struct Stash {
 pub struct Submodule {
     pub name: String,
     pub path: String,
+    pub state: SubmoduleState,
 }
 
 const REF_FORMAT: &str = "--format=%(refname)%00%(objectname)%00%(*objectname)%00\
-%(upstream:short)%00%(upstream:track,nobracket)%00%(HEAD)";
+%(upstream:short)%00%(upstream:track,nobracket)%00%(HEAD)%00%(worktreepath)";
 
 /// Lists branches, remotes, tags, stashes and submodules.
 pub fn list_refs(git: &GitCli, path: &Path) -> Result<Refs> {
@@ -133,7 +137,7 @@ pub fn list_refs(git: &GitCli, path: &Path) -> Result<Refs> {
     )?;
     for line in output.lines() {
         let fields: Vec<&str> = line.split('\0').collect();
-        let [full_name, oid, peeled, upstream, track, head] = fields[..] else {
+        let [full_name, oid, peeled, upstream, track, head, worktree] = fields[..] else {
             continue;
         };
         if let Some(name) = full_name.strip_prefix("refs/heads/") {
@@ -143,6 +147,7 @@ pub fn list_refs(git: &GitCli, path: &Path) -> Result<Refs> {
                 oid: oid.to_owned(),
                 is_head: head == "*",
                 upstream: (!upstream.is_empty()).then(|| parse_upstream(upstream, track)),
+                worktree: Some(worktree.to_owned()).filter(|w| !w.is_empty() && head != "*"),
             });
         } else if let Some(rest) = full_name.strip_prefix("refs/remotes/") {
             let Some(remote) = remote_names.iter().find(|r| {
@@ -194,9 +199,20 @@ pub fn list_refs(git: &GitCli, path: &Path) -> Result<Refs> {
                 Some(Submodule {
                     name: sm.name().to_string(),
                     path: sm.path().ok()?.to_string(),
+                    state: SubmoduleState::Current,
                 })
             })
             .collect();
+    }
+    if !refs.submodules.is_empty()
+        && let Ok(states) = submodule_states(git, path)
+    {
+        for sm in &mut refs.submodules {
+            sm.state = states
+                .get(&sm.path)
+                .copied()
+                .unwrap_or(SubmoduleState::Uninitialized);
+        }
     }
 
     Ok(refs)

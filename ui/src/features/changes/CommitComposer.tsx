@@ -67,12 +67,14 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
     if (blocker || busy) return;
     setBusy(true);
     try {
-      const oid = await ipc.commit(repo, message, {
+      const result = await ipc.commit(repo, message, {
         amend: draft.amend,
         signoff: draft.signoff,
+        noVerify: draft.noVerify,
       });
       clear(repo);
-      updateView(repo, { selected: oid, openFile: null });
+      updateView(repo, { selected: result.oid, openFile: null });
+      if (result.output) toast.output("Output from git hooks", result.output);
     } catch (err) {
       toast.error(draft.amend ? "Could not amend commit" : "Could not commit", String(err));
     } finally {
@@ -143,6 +145,17 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
             onChange={(e) => update(repo, { signoff: e.target.checked })}
           />
           Sign off
+        </label>
+        <label
+          className="flex items-center gap-1.5"
+          title="Don't run the pre-commit and commit-msg hooks"
+        >
+          <input
+            type="checkbox"
+            checked={draft.noVerify}
+            onChange={(e) => update(repo, { noVerify: e.target.checked })}
+          />
+          Skip hooks
         </label>
       </div>
       <Button

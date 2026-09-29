@@ -246,7 +246,7 @@ impl Journal {
             return Err(Error::Invalid(reason));
         }
         let workdir = workdir(path)?;
-        for (i, change) in entry.changes.iter().rev().enumerate() {
+        for (i, change) in ordered(&entry, true).into_iter().enumerate() {
             if let Err(e) = apply(git, &workdir, change, true) {
                 self.failed(entry, i, true);
                 return Err(e);
@@ -261,7 +261,7 @@ impl Journal {
     pub fn redo(&mut self, git: &GitCli, path: &Path) -> Result<String> {
         let entry = self.next(git, path, false)?;
         let workdir = workdir(path)?;
-        for (i, change) in entry.changes.iter().enumerate() {
+        for (i, change) in ordered(&entry, false).into_iter().enumerate() {
             if let Err(e) = apply(git, &workdir, change, false) {
                 self.failed(entry, i, false);
                 return Err(e);
@@ -353,6 +353,33 @@ fn diff(before: &Snapshot, after: &Snapshot, style: UndoStyle) -> Vec<Change> {
         });
     }
     changes
+}
+
+/// The order to apply `entry`'s changes in, backwards (`undo`) or forwards.
+/// A checked-out branch can't be moved without touching the files, so the
+/// branch that HEAD switches away from changes after the switch, and every
+/// other ref (including the one it switches to) before it.
+fn ordered(entry: &Entry, undo: bool) -> Vec<&Change> {
+    let changes: Vec<&Change> = if undo {
+        entry.changes.iter().rev().collect()
+    } else {
+        entry.changes.iter().collect()
+    };
+    let leaving = changes.iter().find_map(|c| match c {
+        Change::Head {
+            before,
+            after,
+            mode: HeadMode::Checkout,
+        } => if undo { after } else { before }.branch.as_deref(),
+        _ => None,
+    });
+    let is_leaving =
+        |c: &Change| matches!(c, Change::Ref { name, .. } if Some(name.as_str()) == leaving);
+    let is_head = |c: &Change| matches!(c, Change::Head { .. });
+    let first = changes.iter().filter(|c| !is_leaving(c) && !is_head(c));
+    let head = changes.iter().filter(|c| is_head(c));
+    let last = changes.iter().filter(|c| is_leaving(c));
+    first.chain(head).chain(last).copied().collect()
 }
 
 /// Whether `now` is where `entry` left the repository (`undo`) or where it

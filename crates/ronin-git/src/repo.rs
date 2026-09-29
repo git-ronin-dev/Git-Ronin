@@ -17,6 +17,23 @@ pub struct RepoInfo {
     pub head: HeadState,
     /// A merge, rebase, … that stopped part-way, e.g. on conflicts.
     pub operation: Option<Operation>,
+    /// Where a stopped rebase is.
+    pub rebase: Option<RebaseProgress>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RebaseProgress {
+    /// The branch being rebased; `None` for a detached HEAD.
+    pub branch: Option<String>,
+    /// The step it stopped at (1-based), of `total`.
+    pub step: u32,
+    pub total: u32,
+    /// The commit it stopped at, abbreviated as git recorded it.
+    pub stopped_at: Option<String>,
+    /// Stopped at an `edit` step so the commit can be amended.
+    pub editing: bool,
 }
 
 /// A multi-step git operation waiting for the user.
@@ -105,6 +122,32 @@ pub fn open_repo(path: &Path) -> Result<RepoInfo> {
         path: root.to_string_lossy().into_owned(),
         is_bare: repo.is_bare(),
         operation: operation(&repo),
+        rebase: rebase_progress(repo.git_dir()),
         head,
+    })
+}
+
+/// Reads the state files of a rebase in progress, if any.
+fn rebase_progress(git_dir: &Path) -> Option<RebaseProgress> {
+    let (dir, step, total) = [
+        ("rebase-merge", "msgnum", "end"),
+        ("rebase-apply", "next", "last"),
+    ]
+    .into_iter()
+    .find(|(dir, ..)| git_dir.join(dir).is_dir())?;
+    let dir = git_dir.join(dir);
+    let read = |name: &str| {
+        std::fs::read_to_string(dir.join(name))
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+    };
+    let number = |name: &str| read(name).and_then(|n| n.parse().ok()).unwrap_or(0);
+    Some(RebaseProgress {
+        branch: read("head-name").and_then(|n| n.strip_prefix("refs/heads/").map(str::to_owned)),
+        step: number(step),
+        total: number(total),
+        stopped_at: read("stopped-sha"),
+        editing: dir.join("amend").is_file(),
     })
 }

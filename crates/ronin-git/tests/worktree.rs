@@ -382,7 +382,8 @@ fn commits_amends_and_signs_off() {
         "Add a\n\nWith a body.\n# not a comment\n",
         CommitOptions::default(),
     )
-    .unwrap();
+    .unwrap()
+    .oid;
     assert_eq!(oid, repo.git(&["rev-parse", "HEAD"]).trim());
     assert_eq!(
         head_message(repo.path()).unwrap().unwrap(),
@@ -398,9 +399,11 @@ fn commits_amends_and_signs_off() {
         CommitOptions {
             amend: true,
             signoff: true,
+            no_verify: false,
         },
     )
-    .unwrap();
+    .unwrap()
+    .oid;
     assert_ne!(amended, oid);
     assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]).trim(), "1");
     let message = head_message(repo.path()).unwrap().unwrap();

@@ -7,10 +7,11 @@ use std::sync::{Arc, Mutex};
 
 use ronin_config::{Config, UiPrefs};
 use ronin_git::{
-    BlobSource, CommitDetail, CommitOptions, DiffOptions, FileDiff, GitVersion, GraphPage, Hunk,
-    IgnoreScope, JournalState, LineSelection, OperationAction, Outcome, PatchTarget, Progress,
-    PullMode, PushOutcome, PushTarget, Refs, RepoInfo, ResetMode, StashOptions, StatusEntry,
-    UndoStyle, WorkingStatus,
+    BisectMark, BisectState, Blame, BlobSource, CommitDetail, CommitOptions, CommitResult,
+    Conflict, DiffOptions, FileCommit, FileDiff, FlowConfig, FlowKind, GitVersion, GraphPage, Hunk,
+    IgnoreScope, JournalState, LfsLock, LfsStatus, LineSelection, OperationAction, Outcome,
+    PatchTarget, Progress, PullMode, PushOutcome, PushTarget, RebasePlan, RebaseStep, Refs,
+    RepoInfo, ResetMode, Resolution, StashOptions, StatusEntry, UndoStyle, WorkingStatus, Worktree,
 };
 use serde::Serialize;
 use tauri::ipc::Response;
@@ -404,14 +405,14 @@ pub async fn apply_lines(
     .await
 }
 
-/// Commits the index and returns the new HEAD.
+/// Commits the index; returns the new HEAD and what hooks printed.
 #[tauri::command]
 pub async fn commit(
     app: AppHandle,
     repo: String,
     message: String,
     options: CommitOptions,
-) -> CmdResult<String> {
+) -> CmdResult<CommitResult> {
     blocking(&app, move |_, s| {
         let label = if options.amend {
             "Amend commit"
@@ -925,6 +926,352 @@ pub async fn resolve_operation(
 pub async fn pending_message(app: AppHandle, repo: String) -> CmdResult<Option<String>> {
     blocking(&app, move |_, s| {
         ronin_git::pending_message(&s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+/// A conflicted file's versions and git's merge of them, for the conflict editor.
+#[tauri::command]
+pub async fn conflict(app: AppHandle, repo: String, path: String) -> CmdResult<Conflict> {
+    blocking(&app, move |_, s| {
+        ronin_git::conflict(s.git()?, &s.session(&repo)?.path, &path).map_err(err)
+    })
+    .await
+}
+
+/// Resolves a conflicted file and marks it resolved.
+#[tauri::command]
+pub async fn resolve_conflict(
+    app: AppHandle,
+    repo: String,
+    path: String,
+    resolution: Resolution,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::resolve_conflict(s.git()?, &s.session(&repo)?.path, &path, &resolution)
+            .map_err(err)
+    })
+    .await
+}
+
+/// The commits an interactive rebase onto `base` (the root when `None`) would replay.
+#[tauri::command]
+pub async fn rebase_plan(
+    app: AppHandle,
+    repo: String,
+    base: Option<String>,
+) -> CmdResult<RebasePlan> {
+    blocking(&app, move |_, s| {
+        ronin_git::rebase_plan(s.git()?, &s.session(&repo)?.path, base.as_deref()).map_err(err)
+    })
+    .await
+}
+
+/// Runs an interactive rebase planned with `rebase_plan` while HEAD was `head`.
+#[tauri::command]
+pub async fn interactive_rebase(
+    app: AppHandle,
+    repo: String,
+    base: Option<String>,
+    head: String,
+    steps: Vec<RebaseStep>,
+) -> CmdResult<Outcome> {
+    blocking(&app, move |_, s| {
+        s.journaled(&repo, "Interactive rebase", UndoStyle::Keep, |git, path| {
+            ronin_git::interactive_rebase(git, path, base.as_deref(), &head, &steps)
+        })
+    })
+    .await
+}
+
+/// Who last changed each line of `path` at `rev`, or in the working tree.
+#[tauri::command]
+pub async fn blame(
+    app: AppHandle,
+    repo: String,
+    path: String,
+    rev: Option<String>,
+    ignore_whitespace: bool,
+) -> CmdResult<Blame> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        ronin_git::blame(
+            s.git()?,
+            &session.path,
+            &path,
+            rev.as_deref(),
+            ignore_whitespace,
+        )
+        .map_err(err)
+    })
+    .await
+}
+
+/// Commits that changed `path`, newest first, following renames.
+#[tauri::command]
+pub async fn file_log(
+    app: AppHandle,
+    repo: String,
+    path: String,
+    rev: Option<String>,
+    skip: u32,
+    limit: u32,
+) -> CmdResult<Vec<FileCommit>> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        ronin_git::file_log(s.git()?, &session.path, &path, rev.as_deref(), skip, limit)
+            .map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn add_submodule(
+    app: AppHandle,
+    repo: String,
+    url: String,
+    path: String,
+) -> CmdResult<()> {
+    blocking(&app, move |app, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::add_submodule(
+            s.git()?,
+            &session.path,
+            &url,
+            &path,
+            &mut reporter(app, &repo),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+/// Clones and checks out submodules at their recorded commits; all when
+/// `paths` is empty.
+#[tauri::command]
+pub async fn update_submodules(app: AppHandle, repo: String, paths: Vec<String>) -> CmdResult<()> {
+    blocking(&app, move |app, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::update_submodules(
+            s.git()?,
+            &session.path,
+            &paths,
+            &mut reporter(app, &repo),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_worktrees(app: AppHandle, repo: String) -> CmdResult<Vec<Worktree>> {
+    blocking(&app, move |_, s| {
+        ronin_git::list_worktrees(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+/// Creates a working tree at `dest` with `branch` (new when `create`, starting at `start`).
+#[tauri::command]
+pub async fn add_worktree(
+    app: AppHandle,
+    repo: String,
+    dest: PathBuf,
+    branch: String,
+    create: bool,
+    start: Option<String>,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::add_worktree(
+            s.git()?,
+            &session.path,
+            &dest,
+            &branch,
+            create,
+            start.as_deref(),
+        );
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_worktree(
+    app: AppHandle,
+    repo: String,
+    path: String,
+    force: bool,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        let result = ronin_git::remove_worktree(s.git()?, &session.path, &path, force);
+        s.refs_moved(&repo);
+        result.map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn prune_worktrees(app: AppHandle, repo: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::prune_worktrees(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn lfs_status(app: AppHandle, repo: String) -> CmdResult<LfsStatus> {
+    blocking(&app, move |_, s| {
+        ronin_git::lfs_status(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn lfs_init(app: AppHandle, repo: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::lfs_init(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn lfs_track(app: AppHandle, repo: String, pattern: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::lfs_track(s.git()?, &s.session(&repo)?.path, &pattern).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn lfs_untrack(
+    app: AppHandle,
+    repo: String,
+    pattern: String,
+    source: String,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::lfs_untrack(s.git()?, &s.session(&repo)?.path, &pattern, &source).map_err(err)
+    })
+    .await
+}
+
+/// Locks on the LFS server (asks it over the network).
+#[tauri::command]
+pub async fn lfs_locks(app: AppHandle, repo: String) -> CmdResult<Vec<LfsLock>> {
+    blocking(&app, move |_, s| {
+        ronin_git::lfs_locks(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn lfs_lock(app: AppHandle, repo: String, path: String) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::lfs_lock(s.git()?, &s.session(&repo)?.path, &path).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn lfs_unlock(app: AppHandle, repo: String, id: String, force: bool) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        ronin_git::lfs_unlock(s.git()?, &s.session(&repo)?.path, &id, force).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn flow_config(app: AppHandle, repo: String) -> CmdResult<Option<FlowConfig>> {
+    blocking(&app, move |_, s| {
+        ronin_git::flow_config(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn flow_init(app: AppHandle, repo: String, config: FlowConfig) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        s.journaled(&repo, "Set up Git Flow", UndoStyle::Keep, |git, path| {
+            ronin_git::flow_init(git, path, &config)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn flow_start(
+    app: AppHandle,
+    repo: String,
+    kind: FlowKind,
+    name: String,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let label = format!("Start {} {name}", flow_noun(kind));
+        s.journaled(&repo, label, UndoStyle::Checkout, |git, path| {
+            ronin_git::flow_start(git, path, kind, &name)
+        })
+    })
+    .await
+}
+
+/// Finishes a Git Flow branch: merges it (and tags releases and hotfixes),
+/// then deletes it unless `keep`.
+#[tauri::command]
+pub async fn flow_finish(
+    app: AppHandle,
+    repo: String,
+    kind: FlowKind,
+    branch: String,
+    tag_message: Option<String>,
+    keep: bool,
+) -> CmdResult<Outcome> {
+    blocking(&app, move |_, s| {
+        let label = format!("Finish {branch}");
+        s.journaled(&repo, label, UndoStyle::Keep, |git, path| {
+            ronin_git::flow_finish(git, path, kind, &branch, tag_message.as_deref(), keep)
+        })
+    })
+    .await
+}
+
+fn flow_noun(kind: FlowKind) -> &'static str {
+    match kind {
+        FlowKind::Feature => "feature",
+        FlowKind::Release => "release",
+        FlowKind::Hotfix => "hotfix",
+    }
+}
+
+#[tauri::command]
+pub async fn bisect_state(app: AppHandle, repo: String) -> CmdResult<Option<BisectState>> {
+    blocking(&app, move |_, s| {
+        ronin_git::bisect_state(s.git()?, &s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
+/// Marks `rev` good, bad or skipped, starting a bisect if needed.
+#[tauri::command]
+pub async fn bisect_mark(
+    app: AppHandle,
+    repo: String,
+    mark: BisectMark,
+    rev: String,
+) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        let session = s.session(&repo)?;
+        let _serialised = lock(&session.journal);
+        let result = ronin_git::bisect_mark(s.git()?, &session.path, mark, &rev);
+        s.refs_moved(&repo);
+        result.map_err(err)
     })
     .await
 }

@@ -7,6 +7,8 @@ export interface ToastItem {
   kind: ToastKind;
   title: string;
   description?: string;
+  /** Stays until dismissed, like errors. */
+  persist?: boolean;
 }
 
 interface ToastState {
@@ -23,7 +25,15 @@ export const useToasts = create<ToastState>()((set) => ({
   dismiss: (id) => set((s) => ({ items: s.items.filter((t) => t.id !== id) })),
 }));
 
-const show = (kind: ToastKind) => (title: string, description?: string) =>
-  useToasts.getState().push({ kind, title, description });
+const show =
+  (kind: ToastKind, persist = false) =>
+  (title: string, description?: string) =>
+    useToasts.getState().push({ kind, title, description, persist });
 
-export const toast = { info: show("info"), success: show("success"), error: show("error") };
+export const toast = {
+  info: show("info"),
+  success: show("success"),
+  error: show("error"),
+  /** Output worth reading, e.g. from git hooks: stays until dismissed. */
+  output: show("info", true),
+};

@@ -18,7 +18,7 @@ export function Toaster() {
         <RadixToast.Root
           key={t.id}
           // Errors stay until dismissed: they often carry git output worth reading.
-          duration={t.kind === "error" ? Infinity : undefined}
+          duration={t.kind === "error" || t.persist ? Infinity : undefined}
           onOpenChange={(open) => !open && dismiss(t.id)}
           className={clsx(
             "flex items-start gap-3 rounded-md border border-l-4 border-line bg-raised p-3 shadow-xl",

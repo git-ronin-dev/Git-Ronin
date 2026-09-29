@@ -8,4 +8,8 @@ amend: boolean,
 /**
  * Add a `Signed-off-by` trailer.
  */
-signoff: boolean, };
+signoff: boolean, 
+/**
+ * Skip the pre-commit and commit-msg hooks.
+ */
+noVerify: boolean, };

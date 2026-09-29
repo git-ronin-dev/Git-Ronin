@@ -17,8 +17,11 @@ use crate::{Error, GitCli, Operation, Result};
 #[ts(export)]
 pub enum Outcome {
     Done,
-    /// Stopped part-way; the repository reports the operation in progress.
+    /// Stopped on conflicts; the repository reports the operation in progress.
     Conflicts,
+    /// Stopped without conflicts, e.g. at a commit an interactive rebase
+    /// marked for editing, or because a command in it failed.
+    Stopped,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
@@ -153,14 +156,22 @@ fn pick(git: &GitCli, path: &Path, command: &str, oid: &str) -> Result<Outcome> 
     finish(path, git.run_raw(&workdir(path)?, args)?)
 }
 
-/// Success, a stop on conflicts, or an error when git failed without
-/// leaving an operation in progress.
+/// Success, a stop (on conflicts or otherwise), or an error when git failed
+/// without leaving an operation in progress.
 pub(crate) fn finish(path: &Path, finished: Finished) -> Result<Outcome> {
-    if finished.success() {
-        return Ok(Outcome::Done);
+    let repo = discover(path)?;
+    if operation(&repo).is_none() {
+        return if finished.success() {
+            Ok(Outcome::Done)
+        } else {
+            Err(finished.into_error())
+        };
     }
-    if operation(&discover(path)?).is_some() {
-        return Ok(Outcome::Conflicts);
-    }
-    Err(finished.into_error())
+    let index = repo.index_or_empty().map_err(gix_err)?;
+    let conflicts = index.entries().iter().any(|e| e.stage_raw() != 0);
+    Ok(if conflicts {
+        Outcome::Conflicts
+    } else {
+        Outcome::Stopped
+    })
 }

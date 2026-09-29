@@ -127,6 +127,21 @@ impl GitCli {
         self.exec(cwd, args, None)
     }
 
+    /// Runs git with `input` on stdin and returns how it finished, whatever
+    /// its exit code.
+    pub(crate) fn run_raw_with_input<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+        input: &[u8],
+    ) -> Result<Finished>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.exec(cwd, args, Some(input))
+    }
+
     /// Runs a long git command (fetch, push, clone, …), passing each
     /// progress update git prints on stderr to `on_progress`. Pass
     /// `--progress` in `args`: git only reports progress to a terminal

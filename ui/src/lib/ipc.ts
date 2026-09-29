@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { BlobSource } from "../bindings/BlobSource";
 import type { CommitDetail } from "../bindings/CommitDetail";
 import type { CommitOptions } from "../bindings/CommitOptions";
+import type { CommitResult } from "../bindings/CommitResult";
 import type { Config } from "../bindings/Config";
 import type { DiffOptions } from "../bindings/DiffOptions";
 import type { FileDiff } from "../bindings/FileDiff";
@@ -79,7 +80,7 @@ export const ipc = {
     target: PatchTarget;
   }) => invoke<void>("apply_lines", args),
   commit: (repo: string, message: string, options: CommitOptions) =>
-    invoke<string>("commit", { repo, message, options }),
+    invoke<CommitResult>("commit", { repo, message, options }),
   headMessage: (repo: string) => invoke<string | null>("head_message", { repo }),
   stashPush: (repo: string, options: StashOptions) =>
     invoke<boolean>("stash_push", { repo, options }),
