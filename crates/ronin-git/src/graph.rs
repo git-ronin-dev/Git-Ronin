@@ -2,8 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use gix::ObjectId;
-use gix::traverse::commit::Topo;
+use gix::traverse::commit::simple::{CommitTimeOrder, Sorting as SimpleSorting};
 use gix::traverse::commit::topo::{Builder, Sorting};
+use gix::traverse::commit::{Info, Simple, Topo};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -83,7 +84,27 @@ pub struct GraphPage {
     pub max_lanes: u16,
 }
 
-type Walk = Topo<gix::OdbHandle, fn(&gix::hash::oid) -> bool>;
+type NoFilter = fn(&gix::hash::oid) -> bool;
+
+/// With a commit-graph file, a true topological walk starts instantly. Without
+/// one it must first read the whole history (seconds on large repos), so we
+/// stream by commit time instead, like plain `git log`. That order only breaks
+/// "children before parents" under clock skew, which costs a missing edge.
+enum Walk {
+    Topo(Topo<gix::OdbHandle, NoFilter>),
+    ByTime(Simple<gix::OdbHandle, NoFilter>),
+}
+
+impl Iterator for Walk {
+    type Item = Result<Info>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Walk::Topo(w) => w.next().map(|r| r.map_err(gix_err)),
+            Walk::ByTime(w) => w.next().map(|r| r.map_err(gix_err)),
+        }
+    }
+}
 
 /// An incrementally computed commit graph. Rows are produced on demand, so
 /// opening a huge repository costs only the rows actually looked at.
@@ -93,6 +114,7 @@ pub struct Graph {
     layout: LaneLayout<ObjectId>,
     labels: HashMap<ObjectId, Vec<RefLabel>>,
     rows: Vec<GraphRow>,
+    row_of: HashMap<ObjectId, u32>,
 }
 
 impl Graph {
@@ -140,11 +162,20 @@ impl Graph {
         let mut seen = HashSet::new();
         tips.retain(|id| seen.insert(*id) && repo.find_commit(*id).is_ok());
 
-        let walk = Builder::from_iters(repo.objects.clone(), tips, None::<Vec<ObjectId>>)
-            .sorting(Sorting::DateOrder)
-            .with_commit_graph(repo.commit_graph_if_enabled().ok().flatten())
-            .build()
-            .map_err(gix_err)?;
+        let walk = match repo.commit_graph_if_enabled().ok().flatten() {
+            Some(commit_graph) => Walk::Topo(
+                Builder::from_iters(repo.objects.clone(), tips, None::<Vec<ObjectId>>)
+                    .sorting(Sorting::DateOrder)
+                    .with_commit_graph(Some(commit_graph))
+                    .build()
+                    .map_err(gix_err)?,
+            ),
+            None => Walk::ByTime(
+                Simple::new(tips, repo.objects.clone())
+                    .sorting(SimpleSorting::ByCommitTime(CommitTimeOrder::NewestFirst))
+                    .map_err(gix_err)?,
+            ),
+        };
 
         Ok(Self {
             repo,
@@ -152,6 +183,7 @@ impl Graph {
             layout: LaneLayout::new(),
             labels,
             rows: Vec::new(),
+            row_of: HashMap::new(),
         })
     }
 
@@ -167,6 +199,12 @@ impl Graph {
             complete: self.walk.is_none(),
             max_lanes: self.layout.max_lanes(),
         })
+    }
+
+    /// Row index of a commit, if it has been loaded.
+    pub fn row_of(&self, oid: &str) -> Option<u32> {
+        let id = ObjectId::from_hex(oid.as_bytes()).ok()?;
+        self.row_of.get(&id).copied()
     }
 
     /// Row indices of commits matching `query` in their id prefix, author or message.
@@ -223,8 +261,9 @@ impl Graph {
             match walk.next() {
                 None => self.walk = None,
                 Some(info) => {
-                    let info = info.map_err(gix_err)?;
+                    let info = info?;
                     let row = self.make_row(info.id, &info.parent_ids)?;
+                    self.row_of.insert(info.id, self.rows.len() as u32);
                     self.rows.push(row);
                 }
             }
@@ -236,7 +275,15 @@ impl Graph {
         let commit = self.repo.find_commit(id).map_err(gix_err)?;
         let author = commit.author().map_err(gix_err)?.trim();
         let summary = commit.message().map_err(gix_err)?.summary().to_string();
-        let placement = self.layout.place(&id, parents);
+        // A parent already placed (clock skew in a by-time walk) can't be
+        // connected downwards; leave the edge out rather than open a lane
+        // that never closes.
+        let pending: Vec<ObjectId> = parents
+            .iter()
+            .filter(|p| !self.row_of.contains_key(*p))
+            .copied()
+            .collect();
+        let placement = self.layout.place(&id, &pending);
         Ok(GraphRow {
             oid: id.to_string(),
             parents: parents.iter().map(ToString::to_string).collect(),

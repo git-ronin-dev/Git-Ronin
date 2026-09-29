@@ -3,7 +3,6 @@ use std::path::Path;
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::error::gix_err;
 use crate::repo::discover;
 use crate::{GitCli, Result};
 
@@ -171,13 +170,17 @@ pub fn list_refs(git: &GitCli, path: &Path) -> Result<Refs> {
         })
         .collect();
 
-    if let Some(submodules) = repo.submodules().map_err(gix_err)? {
-        for sm in submodules {
-            refs.submodules.push(Submodule {
-                name: sm.name().to_string(),
-                path: sm.path().map_err(gix_err)?.to_string(),
-            });
-        }
+    // Best effort: in partial clones `.gitmodules` may not be available locally,
+    // which must not stop branches and tags from loading.
+    if let Ok(Some(submodules)) = repo.submodules() {
+        refs.submodules = submodules
+            .filter_map(|sm| {
+                Some(Submodule {
+                    name: sm.name().to_string(),
+                    path: sm.path().ok()?.to_string(),
+                })
+            })
+            .collect();
     }
 
     Ok(refs)

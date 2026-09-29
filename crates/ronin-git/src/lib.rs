@@ -8,6 +8,8 @@
 //! `.gitattributes`) also use the CLI.
 
 mod cli;
+mod detail;
+mod diff;
 mod error;
 mod graph;
 mod lanes;
@@ -15,6 +17,8 @@ mod refs;
 mod repo;
 
 pub use cli::{GitCli, GitVersion, MIN_GIT_VERSION};
+pub use detail::{CommitDetail, FileChange, FileStatus, Signature, blob_at, commit_detail};
+pub use diff::{DiffLine, DiffOptions, FileDiff, Hunk, LineKind, file_diff, parse_unified};
 pub use error::{Error, Result};
 pub use graph::{Graph, GraphFilter, GraphPage, GraphRow, RefKind, RefLabel};
 pub use lanes::{Edge, EdgeKind};

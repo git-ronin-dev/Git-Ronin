@@ -177,3 +177,55 @@ fn graph_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<Graph>();
 }
+
+#[test]
+fn topo_walk_with_commit_graph_matches_by_time_walk() {
+    let repo = repo_with_merge();
+    let by_time = all_rows(&repo, &GraphFilter::default());
+    repo.git(&["commit-graph", "write", "--reachable"]);
+    let topo = all_rows(&repo, &GraphFilter::default());
+
+    let shape = |rows: &[GraphRow]| -> Vec<(String, u16, usize)> {
+        rows.iter()
+            .map(|r| (r.summary.clone(), r.lane, r.edges.len()))
+            .collect()
+    };
+    assert_eq!(shape(&topo), shape(&by_time));
+}
+
+#[test]
+fn clock_skew_does_not_leave_dangling_lanes() {
+    let repo = TestRepo::new();
+    repo.commit_file("a.txt", "1", "parent");
+    // A child dated a day before its parent.
+    let git = repo
+        .git
+        .clone()
+        .env("GIT_AUTHOR_DATE", "1690000000 +0000")
+        .env("GIT_COMMITTER_DATE", "1690000000 +0000");
+    repo.write("a.txt", "2");
+    git.run(repo.path(), ["commit", "-q", "-am", "skewed child"])
+        .unwrap();
+
+    let rows = all_rows(&repo, &GraphFilter::default());
+    assert_eq!(rows.len(), 2);
+    let mut graph = Graph::open(&repo.git, repo.path(), &GraphFilter::default()).unwrap();
+    assert!(graph.page(0, 10).unwrap().max_lanes <= 2);
+    // Whatever the order, the last row must not leave a lane open below it.
+    let last = rows.last().unwrap();
+    assert!(!last.edges.iter().any(|e| e.kind == EdgeKind::Out));
+}
+
+#[test]
+fn finds_rows_by_commit_id() {
+    let repo = TestRepo::new();
+    let first = repo.commit_file("a.txt", "1", "one");
+    repo.commit_file("a.txt", "2", "two");
+    let mut graph = Graph::open(&repo.git, repo.path(), &GraphFilter::default()).unwrap();
+    graph.page(0, 10).unwrap();
+    assert_eq!(graph.row_of(&first), Some(1));
+    assert_eq!(
+        graph.row_of("0000000000000000000000000000000000000000"),
+        None
+    );
+}
