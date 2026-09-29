@@ -31,9 +31,14 @@ pub enum HeadState {
     },
 }
 
+/// Finds the repository containing `path`, which may be any subdirectory.
+pub(crate) fn discover(path: &Path) -> Result<gix::Repository> {
+    gix::discover(path).map_err(|_| Error::NotARepo(path.to_owned()))
+}
+
 /// Opens the repository containing `path` (which may be any subdirectory).
 pub fn open_repo(path: &Path) -> Result<RepoInfo> {
-    let repo = gix::discover(path).map_err(|_| Error::NotARepo(path.to_owned()))?;
+    let repo = discover(path)?;
     let root = repo.workdir().unwrap_or_else(|| repo.git_dir()).to_owned();
     let head = match repo.head().map_err(gix_err)?.kind {
         gix::head::Kind::Symbolic(reference) => HeadState::Branch {

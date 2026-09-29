@@ -25,6 +25,6 @@ pub enum Error {
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// gix has a distinct error type per operation; the UI only needs the message.
-pub(crate) fn gix_err(err: impl std::error::Error) -> Error {
+pub(crate) fn gix_err(err: impl std::fmt::Display) -> Error {
     Error::Gix(err.to_string())
 }
