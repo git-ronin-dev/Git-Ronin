@@ -12,6 +12,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/language-data": "^6.5.2",
+    "@lezer/common": "^1.5.3",
+    "@lezer/highlight": "^1.2.5",
     "@radix-ui/react-context-menu": "^2.3.7",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-toast": "^1.2.23",

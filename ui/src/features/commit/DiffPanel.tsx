@@ -109,7 +109,7 @@ export function DiffPanel({ repo, oid, file }: { repo: string; oid: string; file
         ) : diff.isError ? (
           <p className="p-8 text-center text-danger select-text">{String(diff.error)}</p>
         ) : diff.data ? (
-          <DiffView diff={diff.data} mode={mode} />
+          <DiffView diff={diff.data} mode={mode} path={file.path} />
         ) : (
           <p className="p-8 text-center text-fg-faint">Loading…</p>
         )}

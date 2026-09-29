@@ -52,3 +52,60 @@
     outline-offset: 1px;
   }
 }
+
+/* Classes emitted by @lezer/highlight's classHighlighter. */
+@layer components {
+  .tok-keyword,
+  .tok-bool,
+  .tok-atom {
+    color: var(--rn-syn-keyword);
+  }
+  .tok-string,
+  .tok-string2,
+  .tok-inserted {
+    color: var(--rn-syn-string);
+  }
+  .tok-number,
+  .tok-literal {
+    color: var(--rn-syn-number);
+  }
+  .tok-comment {
+    color: var(--rn-syn-comment);
+    font-style: italic;
+  }
+  .tok-typeName,
+  .tok-className,
+  .tok-namespace {
+    color: var(--rn-syn-type);
+  }
+  .tok-definition,
+  .tok-heading {
+    color: var(--rn-syn-definition);
+  }
+  .tok-propertyName,
+  .tok-labelName {
+    color: var(--rn-syn-property);
+  }
+  .tok-macroName,
+  .tok-meta,
+  .tok-deleted {
+    color: var(--rn-syn-macro);
+  }
+  .tok-punctuation,
+  .tok-operator {
+    color: var(--rn-syn-punctuation);
+  }
+  .tok-invalid {
+    color: var(--rn-danger);
+  }
+  .tok-link,
+  .tok-url {
+    text-decoration: underline;
+  }
+  .tok-emphasis {
+    font-style: italic;
+  }
+  .tok-strong {
+    font-weight: 600;
+  }
+}

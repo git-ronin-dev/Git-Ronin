@@ -30,6 +30,17 @@
   --rn-lane-6: #a3b848;
   --rn-lane-7: #b08968;
 
+  /* Syntax highlighting in diffs. */
+  --rn-syn-keyword: #b99cff;
+  --rn-syn-string: #9fcf7f;
+  --rn-syn-number: #f0a93a;
+  --rn-syn-comment: #6e717c;
+  --rn-syn-type: #5ec4d6;
+  --rn-syn-definition: #7ea6ff;
+  --rn-syn-property: #e3c07b;
+  --rn-syn-macro: #ef8b6b;
+  --rn-syn-punctuation: #9a9ba3;
+
   --rn-radius-sm: 4px;
   --rn-radius-md: 6px;
   --rn-radius-lg: 10px;
@@ -54,4 +65,14 @@
   --rn-danger: #d93a3a;
   --rn-success: #23915c;
   --rn-warning: #b5740f;
+
+  --rn-syn-keyword: #7c3aed;
+  --rn-syn-string: #2f7d32;
+  --rn-syn-number: #b35c00;
+  --rn-syn-comment: #8a8d96;
+  --rn-syn-type: #0e7490;
+  --rn-syn-definition: #2451c7;
+  --rn-syn-property: #8a5a00;
+  --rn-syn-macro: #b8431f;
+  --rn-syn-punctuation: #5f6068;
 }
