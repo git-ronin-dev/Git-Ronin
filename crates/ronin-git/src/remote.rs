@@ -137,15 +137,20 @@ pub struct PushTarget {
 }
 
 /// Pushes local branch `name` to its upstream, or to `target` (which then
-/// becomes its upstream). `force` uses `--force-with-lease` and
-/// `--force-if-includes`, so it never overwrites commits that haven't been
-/// fetched and looked at.
+/// becomes its upstream).
+///
+/// `force_over` forces the push, but only while the remote branch is still
+/// at that commit (`--force-with-lease=<branch>:<commit>`): pass the commit
+/// the user saw and agreed to replace, so nothing they haven't seen is lost.
+/// (`--force-if-includes` would express the same, but git can't check it
+/// until a fetch has written a reflog for the remote-tracking branch, which
+/// `git clone` doesn't.)
 pub fn push_branch(
     git: &GitCli,
     path: &Path,
     name: &str,
     target: Option<&PushTarget>,
-    force: bool,
+    force_over: Option<&str>,
     on_progress: &mut dyn FnMut(Progress),
 ) -> Result<PushOutcome> {
     let workdir = workdir(path)?;
@@ -169,10 +174,15 @@ pub fn push_branch(
             }
         }
     };
+    let lease = match force_over {
+        Some(oid) if oid.len() >= 40 && oid.bytes().all(|b| b.is_ascii_hexdigit()) => {
+            Some(format!("--force-with-lease={merge}:{oid}"))
+        }
+        Some(oid) => return Err(Error::Invalid(format!("not a commit id: {oid}"))),
+        None => None,
+    };
     let mut args = vec!["push", "--progress", "--porcelain"];
-    if force {
-        args.extend(["--force-with-lease", "--force-if-includes"]);
-    }
+    args.extend(lease.as_deref());
     if set_upstream {
         args.push("--set-upstream");
     }

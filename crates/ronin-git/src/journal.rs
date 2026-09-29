@@ -122,8 +122,9 @@ enum Change {
         name: String,
         before: Option<String>,
         after: Option<String>,
-        /// The branch's upstream before the action, for recreating it.
-        upstream: Option<String>,
+        /// A branch's upstream before and after the action, for recreating
+        /// the branch in either direction.
+        upstreams: (Option<String>, Option<String>),
     },
     /// Short branch names.
     Rename { before: String, after: String },
@@ -328,7 +329,10 @@ fn diff(before: &Snapshot, after: &Snapshot, style: UndoStyle) -> Vec<Change> {
                 name: name.clone(),
                 before: old.map(|v| v.oid.clone()),
                 after: new.map(|v| v.oid.clone()),
-                upstream: old.and_then(|v| v.upstream.clone()),
+                upstreams: (
+                    old.and_then(|v| v.upstream.clone()),
+                    new.and_then(|v| v.upstream.clone()),
+                ),
             })
         })
         .collect();
@@ -438,7 +442,7 @@ fn apply(git: &GitCli, workdir: &Path, change: &Change, undo: bool) -> Result<()
             name,
             before,
             after,
-            upstream,
+            upstreams,
         } => {
             let (from, to) = if undo {
                 (after, before)
@@ -446,9 +450,10 @@ fn apply(git: &GitCli, workdir: &Path, change: &Change, undo: bool) -> Result<()
                 (before, after)
             };
             move_ref(git, workdir, name, from.as_deref(), to.as_deref())?;
+            let upstream = if undo { &upstreams.0 } else { &upstreams.1 };
             // Best effort: the upstream's remote may be gone by now.
-            if let (Some(short), Some(upstream), true, None) =
-                (name.strip_prefix("refs/heads/"), upstream, undo, from)
+            if let (Some(short), Some(upstream), None) =
+                (name.strip_prefix("refs/heads/"), upstream, from)
             {
                 let flag = format!("--set-upstream-to={upstream}");
                 let _ = git.run(workdir, ["branch", "--quiet", &flag, short]);

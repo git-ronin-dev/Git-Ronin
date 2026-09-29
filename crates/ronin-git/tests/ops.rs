@@ -255,13 +255,13 @@ fn pushes_branches_and_tags() {
     let (remote, local) = published();
 
     local.commit_file("b.txt", "b\n", "second");
-    let outcome = push_branch(&local.git, local.path(), "main", None, false, &mut quiet());
+    let outcome = push_branch(&local.git, local.path(), "main", None, None, &mut quiet());
     assert_eq!(outcome.unwrap(), PushOutcome::Pushed);
     assert_eq!(remote.head(), local.head());
 
     // A new branch needs a target, which becomes its upstream.
     local.git(&["switch", "-q", "-c", "topic"]);
-    let err = push_branch(&local.git, local.path(), "topic", None, false, &mut quiet());
+    let err = push_branch(&local.git, local.path(), "topic", None, None, &mut quiet());
     assert!(matches!(err, Err(Error::NoUpstream(_))));
     let target = PushTarget {
         remote: "origin".into(),
@@ -272,7 +272,7 @@ fn pushes_branches_and_tags() {
         local.path(),
         "topic",
         Some(&target),
-        false,
+        None,
         &mut quiet(),
     )
     .unwrap();
@@ -306,28 +306,54 @@ fn pushes_branches_and_tags() {
 }
 
 #[test]
-fn rejected_push_can_be_forced_with_lease() {
+fn rejected_push_can_be_forced_over_the_commit_seen() {
     let (remote, local) = published();
+    let seen = local.git(&["rev-parse", "origin/main"]).trim().to_owned();
     let other = TestRepo::clone_of(&remote);
     other.commit_file("o.txt", "o\n", "other");
     other.git(&["push", "-q", "origin", "main"]);
 
     local.commit_file("l.txt", "l\n", "local");
-    let outcome = push_branch(&local.git, local.path(), "main", None, false, &mut quiet());
+    let outcome = push_branch(&local.git, local.path(), "main", None, None, &mut quiet());
     assert_eq!(outcome.unwrap(), PushOutcome::Rejected);
 
-    // The lease holds only once the remote's commit has been fetched.
-    let forced = push_branch(&local.git, local.path(), "main", None, true, &mut quiet());
-    assert!(forced.is_err(), "{forced:?}");
+    // The remote moved past the commit the user saw: nothing is replaced.
+    let forced = push_branch(
+        &local.git,
+        local.path(),
+        "main",
+        None,
+        Some(&seen),
+        &mut quiet(),
+    );
+    let err = forced.unwrap_err().to_string();
+    assert!(err.contains("changed since"), "{err}");
+    assert_ne!(remote.head(), local.head());
+
+    // Once fetched (and so seen), it can be replaced; no reflog needed.
     fetch(&local.git, local.path(), Some("origin"), &mut quiet()).unwrap();
-    // `--force-if-includes` also wants the fetched commit to have been
-    // integrated or seen in the reflog; after a fetch it is in the reflog of
-    // origin/main but not of main, so rebase onto it first.
-    rebase(&local.git, local.path(), "origin/main").unwrap();
-    local.git(&["commit", "-q", "--amend", "-m", "local, reworded"]);
-    let forced = push_branch(&local.git, local.path(), "main", None, true, &mut quiet());
+    let seen = local.git(&["rev-parse", "origin/main"]).trim().to_owned();
+    let forced = push_branch(
+        &local.git,
+        local.path(),
+        "main",
+        None,
+        Some(&seen),
+        &mut quiet(),
+    );
     assert_eq!(forced.unwrap(), PushOutcome::Pushed);
     assert_eq!(remote.head(), local.head());
+    assert!(
+        push_branch(
+            &local.git,
+            local.path(),
+            "main",
+            None,
+            Some("-f"),
+            &mut quiet()
+        )
+        .is_err()
+    );
 }
 
 #[test]

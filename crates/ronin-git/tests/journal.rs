@@ -139,6 +139,37 @@ fn restores_a_deleted_branch_with_its_upstream() {
 }
 
 #[test]
+fn redo_recreates_a_tracking_branch_with_its_upstream() {
+    let origin = TestRepo::new();
+    origin.commit_file("a.txt", "a\n", "first");
+    origin.git(&["branch", "-q", "feature"]);
+    let repo = TestRepo::clone_of(&origin);
+    let mut journal = Journal::default();
+
+    act(
+        &mut journal,
+        &repo,
+        "Check out",
+        UndoStyle::Checkout,
+        || {
+            ronin_git::checkout_remote_branch(
+                &repo.git,
+                repo.path(),
+                "refs/remotes/origin/feature",
+                "feature",
+            )
+            .unwrap();
+        },
+    );
+    journal.undo(&repo.git, repo.path()).unwrap();
+    assert!(repo.git(&["branch", "--list", "feature"]).is_empty());
+    journal.redo(&repo.git, repo.path()).unwrap();
+    assert_eq!(head(&repo), on("feature"));
+    let upstream = repo.git(&["rev-parse", "--abbrev-ref", "feature@{upstream}"]);
+    assert_eq!(upstream.trim(), "origin/feature");
+}
+
+#[test]
 fn undoes_resets_merges_renames_and_tags() {
     let repo = TestRepo::new();
     let first = repo.commit_file("a.txt", "a\n", "first");
