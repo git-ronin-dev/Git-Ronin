@@ -1,0 +1,80 @@
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { create } from "zustand";
+
+import { ipc } from "../../lib/ipc";
+import { toast } from "../../ui/toast-store";
+
+export interface Tab {
+  path: string;
+  name: string;
+}
+
+interface WorkspaceState {
+  tabs: Tab[];
+  active: string | null;
+  opening: boolean;
+  /** Reopens the tabs of the previous session. */
+  restore: () => Promise<void>;
+  open: (path: string) => Promise<void>;
+  /** Shows a folder picker, then opens the chosen repository. */
+  pickAndOpen: () => Promise<void>;
+  close: (path: string) => Promise<void>;
+  activate: (path: string) => void;
+}
+
+const reportError = (title: string) => (err: unknown) => toast.error(title, String(err));
+
+export const useWorkspace = create<WorkspaceState>()((set, get) => ({
+  tabs: [],
+  active: null,
+  opening: false,
+
+  restore: async () => {
+    try {
+      const [infos, config] = await Promise.all([ipc.restoreTabs(), ipc.configGet()]);
+      const tabs = infos.map(({ path, name }) => ({ path, name }));
+      const saved = config.local.activeTab;
+      const active = tabs.some((t) => t.path === saved) ? saved : (tabs[0]?.path ?? null);
+      set({ tabs, active });
+    } catch (err) {
+      reportError("Could not restore open repositories")(err);
+    }
+  },
+
+  open: async (path) => {
+    set({ opening: true });
+    try {
+      const { path: root, name } = await ipc.openRepo(path);
+      set((s) => ({
+        tabs: s.tabs.some((t) => t.path === root) ? s.tabs : [...s.tabs, { path: root, name }],
+        active: root,
+      }));
+    } catch (err) {
+      reportError("Could not open repository")(err);
+    } finally {
+      set({ opening: false });
+    }
+  },
+
+  pickAndOpen: async () => {
+    const path = await openDialog({ directory: true, title: "Open repository" });
+    if (path) await get().open(path);
+  },
+
+  close: async (path) => {
+    const { tabs, active } = get();
+    const index = tabs.findIndex((t) => t.path === path);
+    const remaining = tabs.filter((t) => t.path !== path);
+    // Closing the active tab activates its neighbour, like a browser.
+    const next =
+      active === path ? (remaining[Math.min(index, remaining.length - 1)]?.path ?? null) : active;
+    set({ tabs: remaining, active: next });
+    await ipc.closeRepo(path).catch(reportError("Could not close repository"));
+    if (next !== active) void ipc.setActiveTab(next).catch(() => {});
+  },
+
+  activate: (path) => {
+    set({ active: path });
+    void ipc.setActiveTab(path).catch(() => {});
+  },
+}));

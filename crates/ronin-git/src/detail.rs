@@ -20,6 +20,9 @@ pub struct CommitDetail {
     pub message: String,
     /// Changes relative to the first parent (or to nothing, for root commits).
     pub files: Vec<FileChange>,
+    /// Why `files` is empty when listing changes failed (e.g. a partial clone
+    /// that can't fetch the blobs). The rest of the detail is still valid.
+    pub files_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -77,20 +80,18 @@ pub fn commit_detail(git: &GitCli, path: &Path, oid: &str) -> Result<CommitDetai
         None => repo.object_hash().empty_tree().to_string(),
     };
     let workdir = repo.workdir().unwrap_or(repo.git_dir());
-    let raw = git.run(
-        workdir,
-        [
-            "diff-tree",
-            "-r",
-            "-z",
-            "-M",
-            "--raw",
-            "--numstat",
-            "--no-commit-id",
-            &base,
-            oid,
-        ],
-    )?;
+    let args = [
+        "diff-tree",
+        "-r",
+        "-z",
+        "-M",
+        "--raw",
+        "--numstat",
+        "--no-commit-id",
+        &base,
+        oid,
+    ];
+    let files = git.run(workdir, args).map(|raw| parse_diff_tree(&raw));
 
     Ok(CommitDetail {
         oid: oid.to_owned(),
@@ -98,7 +99,8 @@ pub fn commit_detail(git: &GitCli, path: &Path, oid: &str) -> Result<CommitDetai
         committer: signature(commit.committer().map_err(gix_err)?),
         message: commit.message_raw_sloppy().to_string(),
         parents,
-        files: parse_diff_tree(&raw),
+        files_error: files.as_ref().err().map(ToString::to_string),
+        files: files.unwrap_or_default(),
     })
 }
 

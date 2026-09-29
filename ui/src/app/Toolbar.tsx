@@ -3,41 +3,33 @@ import {
   ArchiveRestore,
   ArrowDownToLine,
   ArrowUpFromLine,
-  FolderOpen,
   GitBranchPlus,
   PanelLeft,
   PanelRight,
   Redo2,
+  Search,
   Undo2,
   type LucideIcon,
 } from "lucide-react";
 
-import { useRepoStore } from "../features/repo/store";
 import { Tooltip } from "../ui/Tooltip";
 
 interface ToolbarProps {
+  hasRepo: boolean;
   onToggleSidebar: () => void;
   onToggleDetails: () => void;
+  onSearch: () => void;
 }
 
-export function Toolbar({ onToggleSidebar, onToggleDetails }: ToolbarProps) {
-  const repo = useRepoStore((s) => s.repo);
-  const pickAndOpen = useRepoStore((s) => s.pickAndOpen);
+export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }: ToolbarProps) {
   // Repository actions are wired up in Phases 2 and 3.
   const actionsDisabled = true;
 
   return (
-    // Three columns keep the action group centred whatever the repo name's width.
+    // Three columns keep the action group centred.
     <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-surface px-2">
-      <div className="flex min-w-0 items-center gap-1">
+      <div className="flex items-center gap-1">
         <ToolButton icon={PanelLeft} label="Toggle sidebar" onClick={onToggleSidebar} />
-        <ToolButton
-          icon={FolderOpen}
-          label="Open repository"
-          shortcut="Ctrl+O"
-          onClick={pickAndOpen}
-        />
-        <span className="ml-1 truncate font-semibold">{repo?.name}</span>
       </div>
 
       <div className="flex items-center gap-1">
@@ -52,7 +44,14 @@ export function Toolbar({ onToggleSidebar, onToggleDetails }: ToolbarProps) {
         <ToolButton icon={ArchiveRestore} label="Pop" disabled={actionsDisabled} showLabel />
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-1">
+        <ToolButton
+          icon={Search}
+          label="Search commits"
+          shortcut="Ctrl+F"
+          onClick={onSearch}
+          disabled={!hasRepo}
+        />
         <ToolButton icon={PanelRight} label="Toggle details" onClick={onToggleDetails} />
       </div>
     </header>

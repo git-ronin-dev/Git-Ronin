@@ -60,6 +60,8 @@ pub struct RefLabel {
     pub kind: RefKind,
     /// The checked-out branch, or HEAD itself when detached.
     pub current: bool,
+    /// For remote branches, the remote's name; `name` is `<remote>/<branch>`.
+    pub remote: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -82,6 +84,16 @@ pub struct GraphPage {
     pub loaded: u32,
     pub complete: bool,
     pub max_lanes: u16,
+}
+
+fn label(name: &str, full_name: &str, kind: RefKind, current: bool) -> RefLabel {
+    RefLabel {
+        name: name.to_owned(),
+        full_name: full_name.to_owned(),
+        kind,
+        current,
+        remote: None,
+    }
 }
 
 type NoFilter = fn(&gix::hash::oid) -> bool;
@@ -124,15 +136,11 @@ impl Graph {
 
         let mut labels: HashMap<ObjectId, Vec<RefLabel>> = HashMap::new();
         let mut tips = Vec::new();
-        let mut add = |oid: &str, name: &str, full_name: &str, kind, current| -> Result<()> {
+        let mut add = |oid: &str, label: RefLabel| -> Result<()> {
             let oid = ObjectId::from_hex(oid.as_bytes()).map_err(gix_err)?;
-            labels.entry(oid).or_default().push(RefLabel {
-                name: name.to_owned(),
-                full_name: full_name.to_owned(),
-                kind,
-                current,
-            });
-            if kind == RefKind::Head || filter.includes(full_name) {
+            let (kind, include) = (label.kind, filter.includes(&label.full_name));
+            labels.entry(oid).or_default().push(label);
+            if kind == RefKind::Head || include {
                 tips.push(oid);
             }
             Ok(())
@@ -143,19 +151,28 @@ impl Graph {
             && let Some(id) = head.id()
             && filter.solo.is_empty()
         {
-            add(&id.to_string(), "HEAD", "HEAD", RefKind::Head, true)?;
+            add(&id.to_string(), label("HEAD", "HEAD", RefKind::Head, true))?;
         }
         for b in &refs.local {
-            add(&b.oid, &b.name, &b.full_name, RefKind::Local, b.is_head)?;
+            add(
+                &b.oid,
+                label(&b.name, &b.full_name, RefKind::Local, b.is_head),
+            )?;
         }
         for remote in &refs.remotes {
             for b in &remote.branches {
                 let name = format!("{}/{}", remote.name, b.name);
-                add(&b.oid, &name, &b.full_name, RefKind::Remote, false)?;
+                add(
+                    &b.oid,
+                    RefLabel {
+                        remote: Some(remote.name.clone()),
+                        ..label(&name, &b.full_name, RefKind::Remote, false)
+                    },
+                )?;
             }
         }
         for t in &refs.tags {
-            add(&t.oid, &t.name, &t.full_name, RefKind::Tag, false)?;
+            add(&t.oid, label(&t.name, &t.full_name, RefKind::Tag, false))?;
         }
 
         // Tags may point at trees or blobs; only commits start a walk.

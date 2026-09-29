@@ -28,6 +28,7 @@ fn main() {
             commands::restore_tabs,
             commands::close_repo,
             commands::set_active_tab,
+            commands::repo_info,
             commands::list_refs,
             commands::graph_page,
             commands::graph_search,

@@ -5,4 +5,8 @@ export type RefLabel = { name: string, fullName: string, kind: RefKind,
 /**
  * The checked-out branch, or HEAD itself when detached.
  */
-current: boolean, };
+current: boolean, 
+/**
+ * For remote branches, the remote's name; `name` is `<remote>/<branch>`.
+ */
+remote: string | null, };

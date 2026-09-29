@@ -1,11 +1,15 @@
-import { useEffect } from "react";
+import { clsx } from "clsx";
 import { Group, Panel, usePanelRef, type PanelImperativeHandle } from "react-resizable-panels";
 
-import { describeHead } from "../features/repo/head";
-import { useRepoStore } from "../features/repo/store";
+import { CommitPanel } from "../features/commit/CommitPanel";
+import { DiffPanel } from "../features/commit/DiffPanel";
+import { GraphView } from "../features/graph/GraphView";
+import { Sidebar } from "../features/refs/Sidebar";
+import { useWorkspace } from "../features/workspace/store";
+import { updateView, useRepoView } from "../features/workspace/view";
 import { ResizeHandle } from "../ui/ResizeHandle";
 import { EmptyState } from "./EmptyState";
-import { Sidebar } from "./Sidebar";
+import { RepoTabs } from "./RepoTabs";
 import { StatusBar } from "./StatusBar";
 import { Toolbar } from "./Toolbar";
 
@@ -16,28 +20,18 @@ function toggle(panel: PanelImperativeHandle | null) {
 }
 
 export function AppShell() {
-  const repo = useRepoStore((s) => s.repo);
-  const pickAndOpen = useRepoStore((s) => s.pickAndOpen);
+  const { tabs, active } = useWorkspace();
   const sidebar = usePanelRef();
   const details = usePanelRef();
 
-  // Minimal global shortcuts until the command palette lands (Phase 5).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        void pickAndOpen();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [pickAndOpen]);
-
   return (
     <div className="flex h-full flex-col">
+      <RepoTabs />
       <Toolbar
+        hasRepo={active !== null}
         onToggleSidebar={() => toggle(sidebar.current)}
         onToggleDetails={() => toggle(details.current)}
+        onSearch={() => active && updateView(active, { search: { query: "", byPath: false } })}
       />
       <Group id="main-layout" className="min-h-0 flex-1">
         <Panel
@@ -50,42 +44,50 @@ export function AppShell() {
           collapsedSize={0}
           className="bg-surface"
         >
-          <Sidebar />
+          {active && <Sidebar key={active} repo={active} />}
         </Panel>
         <ResizeHandle />
         <Panel id="graph" minSize={320}>
           <main className="h-full">
-            {repo ? (
-              <div className="flex h-full flex-col items-center justify-center gap-1 text-fg-muted">
-                <p className="text-base text-fg">{repo.name}</p>
-                <p>{describeHead(repo.head)}</p>
-                <p className="mt-2 text-xs text-fg-faint">Commit graph arrives in Phase 1.</p>
+            {tabs.length === 0 && <EmptyState />}
+            {/* Every tab stays mounted so switching keeps scroll positions. */}
+            {tabs.map((tab) => (
+              <div key={tab.path} className={clsx("h-full", tab.path !== active && "hidden")}>
+                <RepoMain repo={tab.path} />
               </div>
-            ) : (
-              <EmptyState />
-            )}
+            ))}
           </main>
         </Panel>
         <ResizeHandle />
         <Panel
           id="details"
           panelRef={details}
-          defaultSize={320}
-          minSize={240}
-          maxSize={560}
+          defaultSize={340}
+          minSize={260}
+          maxSize={600}
           collapsible
           collapsedSize={0}
           className="bg-surface"
         >
-          <aside
-            aria-label="Details"
-            className="flex h-full items-center justify-center p-4 text-fg-faint"
-          >
-            {repo && "Select a commit to see its details."}
+          <aside aria-label="Details" className="h-full">
+            {active && <CommitPanel repo={active} />}
           </aside>
         </Panel>
       </Group>
       <StatusBar />
     </div>
+  );
+}
+
+/** Graph, or the diff of an open file on top of it. */
+function RepoMain({ repo }: { repo: string }) {
+  const { openFile } = useRepoView(repo);
+  return (
+    <>
+      <div className={clsx("h-full", openFile && "hidden")}>
+        <GraphView repo={repo} />
+      </div>
+      {openFile && <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />}
+    </>
   );
 }

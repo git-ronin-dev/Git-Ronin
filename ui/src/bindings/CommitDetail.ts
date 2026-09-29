@@ -6,4 +6,9 @@ export type CommitDetail = { oid: string, parents: Array<string>, author: Signat
 /**
  * Changes relative to the first parent (or to nothing, for root commits).
  */
-files: Array<FileChange>, };
+files: Array<FileChange>, 
+/**
+ * Why `files` is empty when listing changes failed (e.g. a partial clone
+ * that can't fetch the blobs). The rest of the detail is still valid.
+ */
+filesError: string | null, };

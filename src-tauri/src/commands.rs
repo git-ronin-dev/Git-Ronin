@@ -115,6 +115,15 @@ pub async fn set_active_tab(app: AppHandle, repo: Option<String>) -> CmdResult<(
     .await
 }
 
+/// Current state of an open repository (HEAD may have moved since it was opened).
+#[tauri::command]
+pub async fn repo_info(app: AppHandle, repo: String) -> CmdResult<RepoInfo> {
+    blocking(&app, move |_, s| {
+        ronin_git::open_repo(&s.session(&repo)?.path).map_err(err)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn list_refs(app: AppHandle, repo: String) -> CmdResult<Refs> {
     blocking(&app, move |_, s| {
