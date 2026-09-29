@@ -1,22 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { clsx } from "clsx";
-import { ArrowLeft } from "lucide-react";
-import { useEffect } from "react";
+import { useCallback } from "react";
 
 import type { FileChange } from "../../bindings/FileChange";
 import { ipc } from "../../lib/ipc";
-import { useSetUiPrefs, useUiPrefs } from "../workspace/queries";
+import { useUiPrefs } from "../workspace/queries";
 import { updateView } from "../workspace/view";
-import { useCommitDetail } from "./queries";
+import { DiffHeader, DiffViewControls } from "./DiffChrome";
 import { DiffView } from "./DiffView";
 import { Stats } from "./FileList";
 import { ImageDiff } from "./ImageDiff";
-import { isImage, splitPath } from "./lines";
+import { isImage } from "./lines";
+import { useCommitDetail } from "./queries";
+import { useEscape } from "./useEscape";
 
 /** Replaces the graph while a file from a commit is open. */
 export function DiffPanel({ repo, oid, file }: { repo: string; oid: string; file: FileChange }) {
   const prefs = useUiPrefs();
-  const setPrefs = useSetUiPrefs();
   const detail = useCommitDetail(repo, oid);
   const base = detail.data ? (detail.data.parents[0] ?? null) : undefined;
   const image = isImage(file.path);
@@ -38,72 +37,26 @@ export function DiffPanel({ repo, oid, file }: { repo: string; oid: string; file
     staleTime: Infinity,
   });
 
-  const close = () => updateView(repo, { openFile: null });
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && updateView(repo, { openFile: null });
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [repo]);
+  const close = useCallback(() => updateView(repo, { openFile: null }), [repo]);
+  useEscape(close);
 
-  const [dir, name] = splitPath(file.path);
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-surface px-2">
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Back to graph"
-          title="Back to graph (Esc)"
-          className="flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
-        >
-          <ArrowLeft className="size-4" />
-        </button>
-        <span className="min-w-0 flex-1 truncate select-text" title={file.path}>
-          {file.oldPath && <span className="text-fg-faint">{file.oldPath} → </span>}
-          <span className="text-fg-faint">{dir}</span>
-          <span className="font-medium">{name}</span>
-        </span>
+      <DiffHeader path={file.path} oldPath={file.oldPath} onClose={close}>
         <Stats file={file} />
-        {prefs && !image && (
-          <>
-            <label className="ml-2 flex items-center gap-1.5 text-xs text-fg-muted">
-              <input
-                type="checkbox"
-                checked={ignoreWhitespace}
-                onChange={(e) => setPrefs.mutate({ ...prefs, ignoreWhitespace: e.target.checked })}
-              />
-              Ignore whitespace
-            </label>
-            <div className="flex rounded-md border border-line text-xs">
-              {(["unified", "split"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setPrefs.mutate({ ...prefs, diffView: m })}
-                  className={clsx(
-                    "h-6 px-2 capitalize first:rounded-l-md last:rounded-r-md",
-                    mode === m ? "bg-raised text-fg" : "text-fg-muted hover:text-fg",
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </header>
+        {!image && <DiffViewControls />}
+      </DiffHeader>
       <div className="min-h-0 flex-1 overflow-auto">
         {image ? (
           base !== undefined && (
             <ImageDiff
               repo={repo}
-              path={file.path}
               before={
                 base && file.status !== "added"
-                  ? { oid: base, path: file.oldPath ?? file.path }
+                  ? { kind: "commit", oid: base, path: file.oldPath ?? file.path }
                   : null
               }
-              after={file.status === "deleted" ? null : oid}
+              after={file.status === "deleted" ? null : { kind: "commit", oid, path: file.path }}
             />
           )
         ) : diff.isError ? (

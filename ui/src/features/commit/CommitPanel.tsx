@@ -82,8 +82,10 @@ export function CommitPanel({ repo }: { repo: string }) {
         )}
         <FileList
           files={d.files}
-          activePath={openFile?.oid === d.oid ? openFile.file.path : null}
-          onOpen={(file) => updateView(repo, { openFile: { oid: d.oid, file } })}
+          activePath={
+            openFile?.kind === "commit" && openFile.oid === d.oid ? openFile.file.path : null
+          }
+          onOpen={(file) => updateView(repo, { openFile: { kind: "commit", oid: d.oid, file } })}
         />
       </div>
     </div>

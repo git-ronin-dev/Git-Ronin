@@ -1,35 +1,33 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+import type { BlobSource } from "../../bindings/BlobSource";
 import { ipc } from "../../lib/ipc";
+import { keys } from "../workspace/queries";
+
+/** One version of a file: as of a commit, or uncommitted. */
+export type BlobRef =
+  | { kind: "commit"; oid: string; path: string }
+  | { kind: "working"; source: BlobSource; path: string };
 
 interface ImageDiffProps {
   repo: string;
-  path: string;
-  /** Commit and path of the previous version, if there is one. */
-  before: { oid: string; path: string } | null;
-  /** Commit of the new version, or null if the file was deleted. */
-  after: string | null;
+  /** The previous version, if there is one. */
+  before: BlobRef | null;
+  /** The new version, or null if the file was deleted. */
+  after: BlobRef | null;
 }
 
-export function ImageDiff({ repo, path, before, after }: ImageDiffProps) {
+export function ImageDiff({ repo, before, after }: ImageDiffProps) {
   return (
     <div className="grid h-full grid-cols-2 gap-4 p-4">
       <Pane label="Before" repo={repo} source={before} />
-      <Pane label="After" repo={repo} source={after ? { oid: after, path } : null} />
+      <Pane label="After" repo={repo} source={after} />
     </div>
   );
 }
 
-function Pane({
-  label,
-  repo,
-  source,
-}: {
-  label: string;
-  repo: string;
-  source: { oid: string; path: string } | null;
-}) {
+function Pane({ label, repo, source }: { label: string; repo: string; source: BlobRef | null }) {
   const url = useBlobUrl(repo, source);
   const [size, setSize] = useState<string>("");
   return (
@@ -57,17 +55,24 @@ function Pane({
   );
 }
 
-function useBlobUrl(repo: string, source: { oid: string; path: string } | null) {
+function useBlobUrl(repo: string, source: BlobRef | null) {
+  const working = source?.kind === "working";
   return useQuery({
-    queryKey: [repo, "blob", source?.oid, source?.path],
+    // Uncommitted versions change, and refresh with the working copy.
+    queryKey: working
+      ? [...keys.working(repo), "blob", source.source, source.path]
+      : [repo, "blob", source?.kind === "commit" && source.oid, source?.path],
     queryFn: async () => {
-      const bytes = await ipc.blob(repo, source!.oid, source!.path);
+      const bytes =
+        source!.kind === "commit"
+          ? await ipc.blob(repo, source!.oid, source!.path)
+          : await ipc.workingBlob(repo, source!.path, source!.source);
       // SVG needs its type to render in <img>; browsers sniff the rest.
       const type = source!.path.toLowerCase().endsWith(".svg") ? "image/svg+xml" : "";
       return toDataUrl(new Blob([bytes], { type }));
     },
     enabled: source !== null,
-    staleTime: Infinity,
+    staleTime: working ? 0 : Infinity,
   }).data;
 }
 

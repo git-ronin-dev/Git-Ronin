@@ -18,14 +18,26 @@ export const keys = {
   search: (repo: string, query: string, byPath: boolean) =>
     [repo, "search", query, byPath] as const,
   commit: (repo: string, oid: string) => [repo, "commit", oid] as const,
+  status: (repo: string) => [repo, "status"] as const,
+  /** Prefix for working-copy diffs and blobs. */
+  working: (repo: string) => [repo, "working"] as const,
+  headMessage: (repo: string) => [repo, "headMessage"] as const,
 };
 
-const LIVE = new Set(["info", "refs", "graph", "search"]);
+const WORKTREE = new Set(["status", "working"]);
+const LIVE = new Set(["info", "refs", "graph", "search", "headMessage", ...WORKTREE]);
 
 /** Refetches everything that depends on a repository's refs. */
 export function invalidateRepo(client: QueryClient, repo: string) {
   return client.invalidateQueries({
     predicate: (q) => q.queryKey[0] === repo && LIVE.has(q.queryKey[1] as string),
+  });
+}
+
+/** Refetches everything that depends on the index and working tree. */
+export function invalidateWorktree(client: QueryClient, repo: string) {
+  return client.invalidateQueries({
+    predicate: (q) => q.queryKey[0] === repo && WORKTREE.has(q.queryKey[1] as string),
   });
 }
 

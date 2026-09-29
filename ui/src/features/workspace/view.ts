@@ -7,11 +7,19 @@ export interface Search {
   byPath: boolean;
 }
 
+/** `selected` value for the uncommitted-changes row. */
+export const WORKING_COPY = "working-copy";
+
+/** A file whose diff replaces the graph. */
+export type OpenFile =
+  | { kind: "commit"; oid: string; file: FileChange }
+  | { kind: "working"; path: string; staged: boolean };
+
 /** What the user is looking at in one repository tab. */
 export interface RepoView {
+  /** A commit id, or `WORKING_COPY`. */
   selected: string | null;
-  /** File whose diff replaces the graph, with the commit it belongs to. */
-  openFile: { oid: string; file: FileChange } | null;
+  openFile: OpenFile | null;
   search: Search | null;
 }
 

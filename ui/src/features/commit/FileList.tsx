@@ -27,7 +27,6 @@ export function FileList({ files, activePath, onOpen }: FileListProps) {
     <ul role="listbox" aria-label="Changed files">
       {files.map((file) => {
         const [dir, name] = splitPath(file.path);
-        const [letter, color] = badges[file.status];
         return (
           <li key={file.path}>
             <button
@@ -41,9 +40,7 @@ export function FileList({ files, activePath, onOpen }: FileListProps) {
                 file.path === activePath ? "bg-accent/20" : "hover:bg-hover",
               )}
             >
-              <span className={clsx("w-3 shrink-0 font-mono text-xs font-bold", color)}>
-                {letter}
-              </span>
+              <Badge status={file.status} />
               <span className="min-w-0 flex-1 truncate">
                 <span className="text-fg-faint">{dir}</span>
                 {name}
@@ -55,6 +52,11 @@ export function FileList({ files, activePath, onOpen }: FileListProps) {
       })}
     </ul>
   );
+}
+
+export function Badge({ status }: { status: FileStatus }) {
+  const [letter, color] = badges[status];
+  return <span className={clsx("w-3 shrink-0 font-mono text-xs font-bold", color)}>{letter}</span>;
 }
 
 export function Stats({ file }: { file: Pick<FileChange, "additions" | "deletions"> }) {

@@ -55,3 +55,8 @@ export function limitLines(hunks: Hunk[], limit: number): Hunk[] {
   }
   return result;
 }
+
+/** Line text for display: diff lines of CRLF files keep their `\r`. */
+export function displayText(text: string): string {
+  return text.endsWith("\r") ? text.slice(0, -1) : text;
+}

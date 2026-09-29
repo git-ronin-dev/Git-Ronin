@@ -20,6 +20,7 @@ import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
 import { Section } from "../../ui/Section";
 import { toast } from "../../ui/toast-store";
 import { revealCommit } from "../graph/reveal";
+import { useStashActions } from "../stash/actions";
 import { invalidateRepo, keys, useConfig, useRefs } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";
 import { updateView } from "../workspace/view";
@@ -41,6 +42,7 @@ export function Sidebar({ repo }: { repo: string }) {
   const refs = useRefs(repo);
   const [filter, setFilter] = useState("");
   const graphFilter = useGraphFilter(repo);
+  const stashActions = useStashActions(repo);
 
   if (refs.isError) return <p className="p-3 text-danger">{String(refs.error)}</p>;
   if (!refs.data) return null;
@@ -113,14 +115,27 @@ export function Sidebar({ repo }: { repo: string }) {
         </Section>
         <Section title="Stashes" icon={<Archive className={icon} />} count={stashes.length}>
           {stashes.map((s) => (
-            <Leaf
+            <ContextMenu
               key={s.oid}
-              depth={1}
-              title={s.message}
-              onClick={() => updateView(repo, { selected: s.oid, openFile: null })}
+              items={[
+                { label: "Apply", onSelect: () => void stashActions.apply(s, false) },
+                { label: "Pop", onSelect: () => void stashActions.apply(s, true) },
+                { label: "Delete…", onSelect: () => void stashActions.drop(s) },
+                "separator",
+                {
+                  label: "Copy message",
+                  onSelect: () => void copyText(s.message, "Copied message"),
+                },
+              ]}
             >
-              <span className="truncate">{s.message}</span>
-            </Leaf>
+              <Leaf
+                depth={1}
+                title={s.message}
+                onClick={() => updateView(repo, { selected: s.oid, openFile: null })}
+              >
+                <span className="truncate">{s.message}</span>
+              </Leaf>
+            </ContextMenu>
           ))}
         </Section>
         <Section title="Submodules" icon={<Boxes className={icon} />} count={submodules.length}>

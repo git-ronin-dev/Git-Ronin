@@ -9,14 +9,16 @@ import { ipc } from "../../lib/ipc";
 import { formatDate, relativeTime } from "../../lib/time";
 import { Avatar } from "../../ui/Avatar";
 import { ContextMenu } from "../../ui/ContextMenu";
-import { keys, useUiPrefs } from "../workspace/queries";
-import { updateView, useRepoView, type Search } from "../workspace/view";
+import { countChanges, useWorkingStatus } from "../changes/queries";
+import { keys, useRepoInfo, useUiPrefs } from "../workspace/queries";
+import { WORKING_COPY, updateView, useRepoView, type Search } from "../workspace/view";
 import { LANE_WIDTH, ROW_HEIGHT } from "./geometry";
 import { GraphLanes } from "./GraphLanes";
 import { RefChips } from "./RefChips";
 import { registerScroller, selectRow } from "./reveal";
 import { SearchBar } from "./SearchBar";
 import { findLoadedIndex, useGraphRows } from "./useGraphRows";
+import { WorkingRow } from "./WorkingRow";
 
 /** Wider graphs are clipped; very wide histories stay readable. */
 const MAX_VISIBLE_LANES = 12;
@@ -30,6 +32,11 @@ export function GraphView({ repo }: { repo: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState({ first: 0, last: 60 });
   const rows = useGraphRows(repo, range.first, range.last);
+  const info = useRepoInfo(repo).data;
+  const status = useWorkingStatus(repo, info !== undefined && !info.isBare);
+  const changes = countChanges(status.data);
+  // The uncommitted-changes row sits above the first commit.
+  const top = changes > 0 ? ROW_HEIGHT : 0;
 
   // The React Compiler can't memoise this hook; we don't use the compiler.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -37,6 +44,7 @@ export function GraphView({ repo }: { repo: string }) {
     count: rows.count,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
+    paddingStart: top,
     overscan: 20,
     onChange: (instance) => {
       const items = instance.getVirtualItems();
@@ -81,9 +89,19 @@ export function GraphView({ repo }: { repo: string }) {
     const delta = { ArrowDown: 1, ArrowUp: -1, PageDown: 20, PageUp: -20 }[e.key];
     if (delta === undefined) return;
     e.preventDefault();
-    const current = view.selected ? findLoadedIndex(client, repo, view.selected) : null;
-    const target = Math.max(0, Math.min(rows.count - 1, (current ?? -1) + delta));
-    void selectRow(client, repo, target);
+    const current =
+      view.selected === WORKING_COPY
+        ? -1
+        : view.selected
+          ? findLoadedIndex(client, repo, view.selected)
+          : null;
+    const target = (current ?? -1) + delta;
+    if (target < 0 && changes > 0) {
+      selectWorking();
+      scrollRef.current?.scrollTo({ top: 0 });
+      return;
+    }
+    if (rows.count > 0) void selectRow(client, repo, Math.max(0, Math.min(rows.count - 1, target)));
   };
 
   const lanes = Math.min(Math.max(rows.maxLanes, 1), MAX_VISIBLE_LANES);
@@ -92,6 +110,9 @@ export function GraphView({ repo }: { repo: string }) {
     (oid: string) => updateView(repo, { selected: oid, openFile: null }),
     [repo],
   );
+  const selectWorking = useCallback(() => select(WORKING_COPY), [select]);
+  const first = rows.row(0);
+  const headLane = first?.refs.some((r) => r.current) ? first.lane : null;
 
   return (
     <div className="@container flex h-full flex-col">
@@ -123,10 +144,22 @@ export function GraphView({ repo }: { repo: string }) {
         aria-rowcount={rows.count}
         className="min-h-0 flex-1 overflow-auto outline-none"
       >
-        {rows.complete && rows.count === 0 ? (
+        {rows.complete && rows.count === 0 && changes === 0 ? (
           <p className="p-8 text-center text-fg-muted">No commits yet.</p>
         ) : (
           <div style={{ height: virtualizer.getTotalSize() }} className="relative">
+            {changes > 0 && (
+              <div style={{ height: ROW_HEIGHT }} className="absolute inset-x-0 top-0 z-10">
+                <WorkingRow
+                  repo={repo}
+                  count={changes}
+                  graphWidth={graphWidth}
+                  headLane={headLane}
+                  selected={view.selected === WORKING_COPY}
+                  onSelect={selectWorking}
+                />
+              </div>
+            )}
             {virtualizer.getVirtualItems().map((item) => {
               const row = rows.row(item.index);
               return (

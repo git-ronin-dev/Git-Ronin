@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useWorkspace } from "../features/workspace/store";
@@ -16,6 +16,7 @@ vi.mock("../lib/ipc", () => ({
     listRefs: vi.fn(),
     graphPage: vi.fn(),
     graphSearch: vi.fn(),
+    workingStatus: vi.fn(),
   },
 }));
 
@@ -43,6 +44,7 @@ describe("AppShell", () => {
       complete: true,
       maxLanes: 1,
     });
+    vi.mocked(ipc.workingStatus).mockResolvedValue({ staged: [], unstaged: [], conflicted: [] });
     useWorkspace.setState({ tabs: [], active: null });
   });
 
@@ -70,5 +72,31 @@ describe("AppShell", () => {
     expect(within(sidebar).getByText("login")).toBeInTheDocument();
     expect(within(sidebar).getByText("↑2")).toBeInTheDocument();
     expect(await screen.findByText("/work/ronin")).toBeInTheDocument();
+  });
+
+  it("shows uncommitted changes above the graph and stages from the details panel", async () => {
+    vi.mocked(ipc.workingStatus).mockResolvedValue({
+      staged: [],
+      unstaged: [
+        { path: "src/lib.rs", oldPath: null, status: "modified", submodule: null },
+        { path: "notes.md", oldPath: null, status: "untracked", submodule: null },
+      ],
+      conflicted: [],
+    });
+    useWorkspace.setState({
+      tabs: [{ path: "/work/ronin", name: "ronin" }],
+      active: "/work/ronin",
+    });
+    renderShell();
+
+    const wip = await screen.findByRole("row", { name: "Uncommitted changes" });
+    expect(within(wip).getByText("2 files")).toBeInTheDocument();
+    fireEvent.mouseDown(wip);
+
+    const unstaged = await screen.findByRole("region", { name: "Unstaged" });
+    expect(within(unstaged).getByText("lib.rs")).toBeInTheDocument();
+    expect(within(unstaged).getByText("notes.md")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Staged" })).toHaveTextContent("None");
+    expect(screen.getByRole("button", { name: "Stage changes to commit" })).toBeDisabled();
   });
 });

@@ -4,6 +4,7 @@ import type { Parser } from "@lezer/common";
 import { classHighlighter, highlightTree } from "@lezer/highlight";
 
 import type { DiffLine } from "../../bindings/DiffLine";
+import { displayText } from "./lines";
 
 export interface Token {
   text: string;
@@ -64,13 +65,13 @@ export function highlightHunk(parser: Parser, lines: DiffLine[]): Map<DiffLine, 
   const tokens = new Map<DiffLine, Token[]>();
   const oldTokens = highlightLines(
     parser,
-    oldSide.map((l) => l.text),
+    oldSide.map((l) => displayText(l.text)),
   );
   oldSide.forEach((l, i) => tokens.set(l, oldTokens[i]!));
   // Context lines take the new side's tokens.
   const newTokens = highlightLines(
     parser,
-    newSide.map((l) => l.text),
+    newSide.map((l) => displayText(l.text)),
   );
   newSide.forEach((l, i) => tokens.set(l, newTokens[i]!));
   return tokens;

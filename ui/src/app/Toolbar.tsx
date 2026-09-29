@@ -11,7 +11,13 @@ import {
   Undo2,
   type LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 
+import { countChanges, useWorkingStatus } from "../features/changes/queries";
+import { useStashActions } from "../features/stash/actions";
+import { StashDialog } from "../features/stash/StashDialog";
+import { useRefs } from "../features/workspace/queries";
+import { useWorkspace } from "../features/workspace/store";
 import { Tooltip } from "../ui/Tooltip";
 
 interface ToolbarProps {
@@ -22,8 +28,9 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }: ToolbarProps) {
-  // Repository actions are wired up in Phases 2 and 3.
+  // Undo, pull, push and branch arrive in Phase 3.
   const actionsDisabled = true;
+  const active = useWorkspace((s) => s.active);
 
   return (
     // Three columns keep the action group centred.
@@ -40,8 +47,14 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
         <ToolButton icon={ArrowUpFromLine} label="Push" disabled={actionsDisabled} showLabel />
         <Divider />
         <ToolButton icon={GitBranchPlus} label="Branch" disabled={actionsDisabled} showLabel />
-        <ToolButton icon={Archive} label="Stash" disabled={actionsDisabled} showLabel />
-        <ToolButton icon={ArchiveRestore} label="Pop" disabled={actionsDisabled} showLabel />
+        {active ? (
+          <StashButtons key={active} repo={active} />
+        ) : (
+          <>
+            <ToolButton icon={Archive} label="Stash" disabled showLabel />
+            <ToolButton icon={ArchiveRestore} label="Pop" disabled showLabel />
+          </>
+        )}
       </div>
 
       <div className="flex justify-end gap-1">
@@ -58,9 +71,38 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
   );
 }
 
+function StashButtons({ repo }: { repo: string }) {
+  const [open, setOpen] = useState(false);
+  const changes = countChanges(useWorkingStatus(repo).data);
+  const latest = useRefs(repo).data?.stashes[0];
+  const actions = useStashActions(repo);
+  return (
+    <>
+      <ToolButton
+        icon={Archive}
+        label="Stash"
+        disabled={changes === 0}
+        onClick={() => setOpen(true)}
+        showLabel
+      />
+      <ToolButton
+        icon={ArchiveRestore}
+        label="Pop"
+        tooltip={latest ? `Pop “${latest.message}”` : undefined}
+        disabled={!latest}
+        onClick={() => latest && void actions.apply(latest, true)}
+        showLabel
+      />
+      <StashDialog repo={repo} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 interface ToolButtonProps {
   icon: LucideIcon;
   label: string;
+  /** Overrides the label as the tooltip. */
+  tooltip?: string;
   shortcut?: string;
   showLabel?: boolean;
   disabled?: boolean;
@@ -70,6 +112,7 @@ interface ToolButtonProps {
 function ToolButton({
   icon: Icon,
   label,
+  tooltip,
   shortcut,
   showLabel,
   disabled,
@@ -87,8 +130,9 @@ function ToolButton({
       {showLabel && <span className="text-[10px] leading-none">{label}</span>}
     </button>
   );
-  if (showLabel && !shortcut) return button;
-  return <Tooltip content={shortcut ? `${label} (${shortcut})` : label}>{button}</Tooltip>;
+  if (showLabel && !shortcut && !tooltip) return button;
+  const content = tooltip ?? label;
+  return <Tooltip content={shortcut ? `${content} (${shortcut})` : content}>{button}</Tooltip>;
 }
 
 function Divider() {

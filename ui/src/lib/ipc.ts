@@ -1,15 +1,24 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import type { BlobSource } from "../bindings/BlobSource";
 import type { CommitDetail } from "../bindings/CommitDetail";
+import type { CommitOptions } from "../bindings/CommitOptions";
 import type { Config } from "../bindings/Config";
 import type { DiffOptions } from "../bindings/DiffOptions";
 import type { FileDiff } from "../bindings/FileDiff";
 import type { GitVersion } from "../bindings/GitVersion";
 import type { GraphPage } from "../bindings/GraphPage";
+import type { Hunk } from "../bindings/Hunk";
+import type { IgnoreScope } from "../bindings/IgnoreScope";
+import type { LineSelection } from "../bindings/LineSelection";
+import type { PatchTarget } from "../bindings/PatchTarget";
 import type { Refs } from "../bindings/Refs";
 import type { RepoInfo } from "../bindings/RepoInfo";
+import type { StashOptions } from "../bindings/StashOptions";
+import type { StatusEntry } from "../bindings/StatusEntry";
 import type { UiPrefs } from "../bindings/UiPrefs";
+import type { WorkingStatus } from "../bindings/WorkingStatus";
 
 /** Typed wrappers for the Rust commands in src-tauri/src/commands.rs. */
 export const ipc = {
@@ -45,9 +54,42 @@ export const ipc = {
   }) => invoke<FileDiff>("file_diff", args),
   blob: (repo: string, oid: string, path: string) =>
     invoke<ArrayBuffer>("blob", { repo, oid, path }),
+
+  workingStatus: (repo: string) => invoke<WorkingStatus>("working_status", { repo }),
+  workingDiff: (repo: string, entry: StatusEntry, staged: boolean, options: DiffOptions) =>
+    invoke<FileDiff>("working_diff", { repo, entry, staged, options }),
+  workingBlob: (repo: string, path: string, source: BlobSource) =>
+    invoke<ArrayBuffer>("working_blob", { repo, path, source }),
+  stageFiles: (repo: string, paths: string[]) => invoke<void>("stage_files", { repo, paths }),
+  unstageFiles: (repo: string, paths: string[]) => invoke<void>("unstage_files", { repo, paths }),
+  discardFiles: (repo: string, entries: StatusEntry[]) =>
+    invoke<void>("discard_files", { repo, entries }),
+  applyLines: (args: {
+    repo: string;
+    path: string;
+    hunks: Hunk[];
+    selection: LineSelection[];
+    target: PatchTarget;
+  }) => invoke<void>("apply_lines", args),
+  commit: (repo: string, message: string, options: CommitOptions) =>
+    invoke<string>("commit", { repo, message, options }),
+  headMessage: (repo: string) => invoke<string | null>("head_message", { repo }),
+  stashPush: (repo: string, options: StashOptions) =>
+    invoke<boolean>("stash_push", { repo, options }),
+  stashApply: (repo: string, index: number, oid: string, pop: boolean) =>
+    invoke<void>("stash_apply", { repo, index, oid, pop }),
+  stashDrop: (repo: string, index: number, oid: string) =>
+    invoke<void>("stash_drop", { repo, index, oid }),
+  addToGitignore: (repo: string, path: string, scope: IgnoreScope) =>
+    invoke<string>("add_to_gitignore", { repo, path, scope }),
 };
 
 /** Fires with the repository path when its refs change on disk. */
 export function onRepoChanged(handler: (repo: string) => void): Promise<UnlistenFn> {
   return listen<string>("repo-changed", (event) => handler(event.payload));
+}
+
+/** Fires with the repository path when its index or working tree change on disk. */
+export function onWorktreeChanged(handler: (repo: string) => void): Promise<UnlistenFn> {
+  return listen<string>("worktree-changed", (event) => handler(event.payload));
 }

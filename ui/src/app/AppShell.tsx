@@ -1,12 +1,14 @@
 import { clsx } from "clsx";
 import { Group, Panel, usePanelRef, type PanelImperativeHandle } from "react-resizable-panels";
 
+import { ChangesPanel } from "../features/changes/ChangesPanel";
+import { WorkingDiffPanel } from "../features/changes/WorkingDiffPanel";
 import { CommitPanel } from "../features/commit/CommitPanel";
 import { DiffPanel } from "../features/commit/DiffPanel";
 import { GraphView } from "../features/graph/GraphView";
 import { Sidebar } from "../features/refs/Sidebar";
 import { useWorkspace } from "../features/workspace/store";
-import { updateView, useRepoView } from "../features/workspace/view";
+import { WORKING_COPY, updateView, useRepoView } from "../features/workspace/view";
 import { ResizeHandle } from "../ui/ResizeHandle";
 import { EmptyState } from "./EmptyState";
 import { RepoTabs } from "./RepoTabs";
@@ -70,7 +72,7 @@ export function AppShell() {
           className="bg-surface"
         >
           <aside aria-label="Details" className="h-full">
-            {active && <CommitPanel repo={active} />}
+            {active && <Details repo={active} />}
           </aside>
         </Panel>
       </Group>
@@ -87,7 +89,18 @@ function RepoMain({ repo }: { repo: string }) {
       <div className={clsx("h-full", openFile && "hidden")}>
         <GraphView repo={repo} />
       </div>
-      {openFile && <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />}
+      {openFile?.kind === "commit" && (
+        <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />
+      )}
+      {openFile?.kind === "working" && (
+        <WorkingDiffPanel repo={repo} path={openFile.path} staged={openFile.staged} />
+      )}
     </>
   );
+}
+
+/** Staging and commit composer for uncommitted changes, else the selected commit. */
+function Details({ repo }: { repo: string }) {
+  const { selected } = useRepoView(repo);
+  return selected === WORKING_COPY ? <ChangesPanel repo={repo} /> : <CommitPanel repo={repo} />;
 }

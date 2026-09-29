@@ -9,7 +9,7 @@ work exactly as they do on the command line.
 
 ## Status
 
-Read-only viewer (phase 1 of the roadmap):
+Viewer and working copy (phases 1 and 2 of the roadmap):
 
 - Repository tabs, restored between sessions, and a recent list
 - Commit graph for all branches, remotes and tags; opens instantly and loads
@@ -17,9 +17,16 @@ Read-only viewer (phase 1 of the roadmap):
 - Search by message, author, SHA or path; hide or solo any branch
 - Commit details with changed files; unified and split diffs with syntax
   highlighting, whitespace-insensitive mode and image diffs
-- Refreshes by itself when the repository changes outside the app
+- Uncommitted changes above the graph: stage, unstage or discard whole
+  files, single hunks or single lines; add files to `.gitignore`
+- Commit with a summary and body, amend and sign-off; hooks and GPG/SSH
+  signing apply as configured
+- Stash (optionally with untracked files or keeping the index), then apply,
+  pop or delete stashes
+- Refreshes by itself when the repository or its files change outside the
+  app; ignored directories such as `node_modules` are not watched
 
-Staging, committing, branching and remote operations come next.
+Branching and remote operations come next.
 
 ## Layout
 
