@@ -1,0 +1,16 @@
+[package]
+name = "ronin-config"
+description = "Settings storage for Git Ronin: portable preferences and machine-local state."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

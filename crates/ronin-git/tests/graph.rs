@@ -229,3 +229,17 @@ fn finds_rows_by_commit_id() {
         None
     );
 }
+
+#[test]
+fn locate_loads_history_until_found() {
+    let repo = TestRepo::new();
+    let first = repo.commit_file("a.txt", "0", "c0");
+    for i in 1..5 {
+        repo.commit_file("a.txt", &i.to_string(), &format!("c{i}"));
+    }
+    let mut graph = Graph::open(&repo.git, repo.path(), &GraphFilter::default()).unwrap();
+    assert_eq!(graph.row_of(&first), None, "nothing loaded yet");
+    assert_eq!(graph.locate(&first).unwrap(), Some(4));
+    let absent = "0123456789012345678901234567890123456789";
+    assert_eq!(graph.locate(absent).unwrap(), None);
+}

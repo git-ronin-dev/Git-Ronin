@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use ts_rs::TS;
@@ -34,6 +34,13 @@ pub enum HeadState {
 /// Finds the repository containing `path`, which may be any subdirectory.
 pub(crate) fn discover(path: &Path) -> Result<gix::Repository> {
     gix::discover(path).map_err(|_| Error::NotARepo(path.to_owned()))
+}
+
+/// The repository's git dir and common dir. They differ for linked worktrees,
+/// whose HEAD lives in the former and shared refs in the latter.
+pub fn git_dirs(path: &Path) -> Result<(PathBuf, PathBuf)> {
+    let repo = discover(path)?;
+    Ok((repo.git_dir().to_owned(), repo.common_dir().to_owned()))
 }
 
 /// Opens the repository containing `path` (which may be any subdirectory).

@@ -25,4 +25,4 @@ pub use lanes::{Edge, EdgeKind};
 pub use refs::{
     LocalBranch, Refs, Remote, RemoteBranch, Stash, Submodule, Tag, Upstream, list_refs,
 };
-pub use repo::{HeadState, RepoInfo, open_repo};
+pub use repo::{HeadState, RepoInfo, git_dirs, open_repo};

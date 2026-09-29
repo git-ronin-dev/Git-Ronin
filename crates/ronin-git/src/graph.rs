@@ -207,6 +207,17 @@ impl Graph {
         self.row_of.get(&id).copied()
     }
 
+    /// Row index of a commit, loading further history until it is found.
+    /// `None` if the commit isn't part of this graph.
+    pub fn locate(&mut self, oid: &str) -> Result<Option<u32>> {
+        let id = ObjectId::from_hex(oid.as_bytes()).map_err(gix_err)?;
+        while !self.row_of.contains_key(&id) && self.walk.is_some() {
+            let target = self.rows.len() + 1000;
+            self.load_until(target)?;
+        }
+        Ok(self.row_of.get(&id).copied())
+    }
+
     /// Row indices of commits matching `query` in their id prefix, author or message.
     pub fn search(&mut self, query: &str) -> Result<Vec<u32>> {
         let query = query.trim().to_lowercase();
