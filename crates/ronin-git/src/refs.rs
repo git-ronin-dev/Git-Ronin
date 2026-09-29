@@ -45,6 +45,9 @@ pub struct Upstream {
 #[ts(export)]
 pub struct Remote {
     pub name: String,
+    pub url: Option<String>,
+    /// Only when it differs from `url`.
+    pub push_url: Option<String>,
     pub branches: Vec<RemoteBranch>,
 }
 
@@ -97,9 +100,22 @@ pub fn list_refs(git: &GitCli, path: &Path) -> Result<Refs> {
     let mut remote_names: Vec<String> = repo.remote_names().iter().map(|n| n.to_string()).collect();
     refs.remotes = remote_names
         .iter()
-        .map(|name| Remote {
-            name: name.clone(),
-            branches: Vec::new(),
+        .map(|name| {
+            let remote = repo.find_remote(name.as_str()).ok();
+            let url = |direction| {
+                remote
+                    .as_ref()
+                    .and_then(|r| r.url(direction))
+                    .map(|u| u.to_bstring().to_string())
+            };
+            let fetch = url(gix::remote::Direction::Fetch);
+            let push = url(gix::remote::Direction::Push);
+            Remote {
+                name: name.clone(),
+                push_url: push.filter(|p| Some(p) != fetch.as_ref()),
+                url: fetch,
+                branches: Vec::new(),
+            }
         })
         .collect();
     // Longest first, so `origin/sub` wins over `origin` for `refs/remotes/origin/sub/x`.

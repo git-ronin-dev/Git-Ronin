@@ -20,6 +20,10 @@ pub enum Error {
     Bare(PathBuf),
     #[error("{0}")]
     Invalid(String),
+    #[error("branch {0} is not fully merged")]
+    NotMerged(String),
+    #[error("branch {0} has no upstream branch")]
+    NoUpstream(String),
     #[error("git: {0}")]
     Gix(String),
     #[error(transparent)]

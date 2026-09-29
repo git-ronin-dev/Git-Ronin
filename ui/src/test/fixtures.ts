@@ -8,6 +8,7 @@ export const repoInfo: RepoInfo = {
   name: "ronin",
   isBare: false,
   head: { kind: "branch", name: "main", unborn: false },
+  operation: null,
 };
 
 export const config: Config = {
@@ -37,6 +38,8 @@ export const refs: Refs = {
   remotes: [
     {
       name: "origin",
+      url: "https://example.com/ronin.git",
+      pushUrl: null,
       branches: [{ name: "main", fullName: "refs/remotes/origin/main", oid: "a".repeat(40) }],
     },
   ],

@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::Deserialize;
 use ts_rs::TS;
 
-use crate::repo::discover;
+use crate::repo::workdir;
 use crate::{Error, GitCli, Result};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, TS)]
@@ -50,13 +50,6 @@ pub fn stash_drop(git: &GitCli, path: &Path, index: u32, oid: &str) -> Result<()
     let name = checked_stash(git, &workdir, index, oid)?;
     git.run(&workdir, ["stash", "drop", "--quiet", &name])?;
     Ok(())
-}
-
-fn workdir(path: &Path) -> Result<std::path::PathBuf> {
-    let repo = discover(path)?;
-    repo.workdir()
-        .map(Path::to_owned)
-        .ok_or_else(|| Error::Bare(path.to_owned()))
 }
 
 fn stash_top(git: &GitCli, workdir: &Path) -> Result<Option<String>> {

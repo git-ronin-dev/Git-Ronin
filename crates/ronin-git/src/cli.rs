@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -96,7 +96,7 @@ impl GitCli {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        self.exec(cwd, args, None, &[0])
+        self.exec(cwd, args, None)?.check(&[0])
     }
 
     /// Runs git with `input` on stdin and returns its stdout.
@@ -105,7 +105,7 @@ impl GitCli {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        self.exec(cwd, args, Some(input), &[0])
+        self.exec(cwd, args, Some(input))?.check(&[0])
     }
 
     /// Like [`run`](Self::run), but also accepts the given non-zero exit
@@ -115,10 +115,97 @@ impl GitCli {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        self.exec(cwd, args, None, codes)
+        self.exec(cwd, args, None)?.check(codes)
     }
 
-    fn exec<I, S>(&self, cwd: &Path, args: I, input: Option<&[u8]>, codes: &[i32]) -> Result<String>
+    /// Runs git and returns how it finished, whatever its exit code.
+    pub(crate) fn run_raw<I, S>(&self, cwd: &Path, args: I) -> Result<Finished>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.exec(cwd, args, None)
+    }
+
+    /// Runs a long git command (fetch, push, clone, …), passing each
+    /// progress update git prints on stderr to `on_progress`. Pass
+    /// `--progress` in `args`: git only reports progress to a terminal
+    /// otherwise. Returns how it finished, whatever its exit code.
+    pub(crate) fn run_streaming<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+        on_progress: &mut dyn FnMut(Progress),
+    ) -> Result<Finished>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let args: Vec<OsString> = args.into_iter().map(|a| a.as_ref().to_owned()).collect();
+        let mut child = self
+            .command(cwd)
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let mut stdout = child.stdout.take().expect("stdout is piped");
+        let reader = std::thread::spawn(move || {
+            let mut out = Vec::new();
+            stdout.read_to_end(&mut out).map(|_| out)
+        });
+
+        // Progress lines end in '\r' while they update and '\n' when done;
+        // messages always end in '\n'. Only the messages are kept.
+        let mut stderr = child.stderr.take().expect("stderr is piped");
+        let mut messages: Vec<String> = Vec::new();
+        let mut line: Vec<u8> = Vec::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            let n = match stderr.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e.into()),
+            };
+            for &b in &buf[..n] {
+                if b != b'\r' && b != b'\n' {
+                    line.push(b);
+                    continue;
+                }
+                let text = String::from_utf8_lossy(&line).trim().to_owned();
+                line.clear();
+                if text.is_empty() {
+                    continue;
+                }
+                match Progress::parse(&text) {
+                    Some(progress) => on_progress(progress),
+                    None if b == b'\n' => {
+                        on_progress(Progress {
+                            message: text.clone(),
+                            percent: None,
+                        });
+                        messages.push(text);
+                    }
+                    None => {}
+                }
+            }
+        }
+        if !line.is_empty() {
+            messages.push(String::from_utf8_lossy(&line).trim().to_owned());
+        }
+        let status = child.wait()?;
+        let stdout = reader
+            .join()
+            .map_err(|_| io::Error::other("stdout reader panicked"))??;
+        Ok(Finished {
+            args: join_args(&args),
+            code: status.code(),
+            stdout: String::from_utf8_lossy(&stdout).into_owned(),
+            stderr: messages.join("\n"),
+        })
+    }
+
+    fn exec<I, S>(&self, cwd: &Path, args: I, input: Option<&[u8]>) -> Result<Finished>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
@@ -149,19 +236,10 @@ impl GitCli {
                 output
             }
         };
-        if output.status.code().is_some_and(|c| codes.contains(&c)) {
-            return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
-        }
-        Err(Error::Command {
-            args: args
-                .iter()
-                .map(|a| a.to_string_lossy())
-                .collect::<Vec<_>>()
-                .join(" "),
-            code: output
-                .status
-                .code()
-                .map_or_else(|| "killed by signal".into(), |c| c.to_string()),
+        Ok(Finished {
+            args: join_args(&args),
+            code: output.status.code(),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
         })
     }
@@ -173,6 +251,9 @@ impl GitCli {
             .env("LC_ALL", "C")
             // Never hang on a terminal prompt; the UI supplies its own.
             .env("GIT_TERMINAL_PROMPT", "0")
+            // Commands that would open an editor (merge --continue, revert,
+            // rebase --continue) keep the message git prepared.
+            .env("GIT_EDITOR", "true")
             .envs(self.env.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::null());
         #[cfg(windows)]
@@ -183,6 +264,82 @@ impl GitCli {
         }
         cmd
     }
+}
+
+/// How a git command finished.
+#[derive(Debug)]
+pub(crate) struct Finished {
+    args: String,
+    /// `None` if git was killed by a signal.
+    pub code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl Finished {
+    pub fn success(&self) -> bool {
+        self.code == Some(0)
+    }
+
+    /// Stdout if git exited with one of `codes`, else an error with stderr.
+    pub fn check(self, codes: &[i32]) -> Result<String> {
+        if self.code.is_some_and(|c| codes.contains(&c)) {
+            Ok(self.stdout)
+        } else {
+            Err(self.into_error())
+        }
+    }
+
+    pub fn into_error(self) -> Error {
+        Error::Command {
+            args: self.args,
+            code: self
+                .code
+                .map_or_else(|| "killed by signal".into(), |c| c.to_string()),
+            stderr: self.stderr,
+        }
+    }
+}
+
+fn join_args(args: &[OsString]) -> String {
+    args.iter()
+        .map(|a| a.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// One progress update from a long-running command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Progress {
+    /// E.g. "Receiving objects", or a whole message line from git.
+    pub message: String,
+    pub percent: Option<u8>,
+}
+
+impl Progress {
+    /// Parses lines such as `Receiving objects:  45% (450/1000), 1.2 MiB`
+    /// or `remote: Counting objects: 100% (10/10), done.`
+    fn parse(line: &str) -> Option<Self> {
+        let line = line.strip_prefix("remote: ").unwrap_or(line);
+        let (phase, rest) = line.split_once(": ")?;
+        let digits = rest.trim_start().split('%').next()?;
+        let percent: u8 = digits.parse().ok()?;
+        Some(Self {
+            message: phase.trim().to_owned(),
+            percent: Some(percent.min(100)),
+        })
+    }
+}
+
+/// Rejects a user-supplied name or revision that git would read as an
+/// option.
+pub(crate) fn operand(value: &str) -> Result<&str> {
+    if value.is_empty() || value.starts_with('-') {
+        return Err(Error::Invalid(format!("invalid name: “{value}”")));
+    }
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -210,6 +367,26 @@ mod tests {
         );
         assert_eq!(GitVersion::parse("git version 2.40"), Some(v(2, 40, 0)));
         assert_eq!(GitVersion::parse("hg version 6.0"), None);
+    }
+
+    #[test]
+    fn parses_progress_lines() {
+        let p = |s| Progress::parse(s);
+        assert_eq!(
+            p("Receiving objects:  45% (450/1000), 1.20 MiB | 2.00 MiB/s"),
+            Some(Progress {
+                message: "Receiving objects".into(),
+                percent: Some(45)
+            })
+        );
+        assert_eq!(
+            p("remote: Counting objects: 100% (10/10), done.")
+                .unwrap()
+                .message,
+            "Counting objects"
+        );
+        assert_eq!(p("From github.com:owner/repo"), None);
+        assert_eq!(p("error: failed to push some refs"), None);
     }
 
     #[test]

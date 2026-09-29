@@ -7,7 +7,7 @@ use std::path::{Component, Path};
 use serde::Deserialize;
 use ts_rs::TS;
 
-use crate::repo::discover;
+use crate::repo::workdir;
 use crate::{Error, FileStatus, GitCli, Hunk, LineKind, Result, StatusEntry};
 
 /// Where a partial patch goes.
@@ -222,13 +222,6 @@ fn quote_path(path: &str) -> String {
     }
     quoted.push('"');
     quoted
-}
-
-fn workdir(path: &Path) -> Result<std::path::PathBuf> {
-    let repo = discover(path)?;
-    repo.workdir()
-        .map(Path::to_owned)
-        .ok_or_else(|| Error::Bare(path.to_owned()))
 }
 
 /// Runs `git <args>` on literal pathspecs passed through stdin, which has

@@ -21,6 +21,13 @@ impl TestRepo {
         repo
     }
 
+    /// A bare repository, for pushing to.
+    pub fn bare() -> Self {
+        let repo = Self::empty();
+        repo.git(&["init", "-q", "--bare", "-b", "main"]);
+        repo
+    }
+
     /// Clones `origin` into a new temp dir.
     pub fn clone_of(origin: &TestRepo) -> Self {
         let repo = Self::empty();
@@ -58,6 +65,14 @@ impl TestRepo {
         let path = self.path().join(name);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, contents).unwrap();
+    }
+
+    pub fn head(&self) -> String {
+        self.git(&["rev-parse", "HEAD"]).trim().to_owned()
+    }
+
+    pub fn read(&self, name: &str) -> String {
+        std::fs::read_to_string(self.path().join(name)).unwrap()
     }
 
     pub fn commit_file(&self, name: &str, contents: &str, message: &str) -> String {

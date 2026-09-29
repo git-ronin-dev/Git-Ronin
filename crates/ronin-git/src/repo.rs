@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::error::gix_err;
@@ -15,6 +15,22 @@ pub struct RepoInfo {
     pub name: String,
     pub is_bare: bool,
     pub head: HeadState,
+    /// A merge, rebase, … that stopped part-way, e.g. on conflicts.
+    pub operation: Option<Operation>,
+}
+
+/// A multi-step git operation waiting for the user.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Operation {
+    Merge,
+    Rebase,
+    CherryPick,
+    Revert,
+    /// `git am`, applying patches from a mailbox.
+    ApplyMailbox,
+    Bisect,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -34,6 +50,27 @@ pub enum HeadState {
 /// Finds the repository containing `path`, which may be any subdirectory.
 pub(crate) fn discover(path: &Path) -> Result<gix::Repository> {
     gix::discover(path).map_err(|_| Error::NotARepo(path.to_owned()))
+}
+
+/// The working tree root of the repository containing `path`.
+pub(crate) fn workdir(path: &Path) -> Result<PathBuf> {
+    let repo = discover(path)?;
+    repo.workdir()
+        .map(Path::to_owned)
+        .ok_or_else(|| Error::Bare(path.to_owned()))
+}
+
+/// The operation in progress in `repo`, if any.
+pub(crate) fn operation(repo: &gix::Repository) -> Option<Operation> {
+    use gix::state::InProgress as P;
+    Some(match repo.state()? {
+        P::Merge => Operation::Merge,
+        P::Rebase | P::RebaseInteractive | P::ApplyMailboxRebase => Operation::Rebase,
+        P::CherryPick | P::CherryPickSequence => Operation::CherryPick,
+        P::Revert | P::RevertSequence => Operation::Revert,
+        P::ApplyMailbox => Operation::ApplyMailbox,
+        P::Bisect => Operation::Bisect,
+    })
 }
 
 /// The repository's git dir and common dir. They differ for linked worktrees,
@@ -67,6 +104,7 @@ pub fn open_repo(path: &Path) -> Result<RepoInfo> {
             .into_owned(),
         path: root.to_string_lossy().into_owned(),
         is_bare: repo.is_bare(),
+        operation: operation(&repo),
         head,
     })
 }
