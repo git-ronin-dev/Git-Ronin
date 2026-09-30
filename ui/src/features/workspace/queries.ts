@@ -24,9 +24,17 @@ export const keys = {
   headMessage: (repo: string) => [repo, "headMessage"] as const,
   pendingMessage: (repo: string) => [repo, "pendingMessage"] as const,
   journal: (repo: string) => [repo, "journal"] as const,
+  worktrees: (repo: string) => [repo, "worktrees"] as const,
+  flow: (repo: string) => [repo, "flow"] as const,
+  lfs: (repo: string) => [repo, "lfs"] as const,
+  /** Locks on the LFS server; refreshed only on demand. */
+  lfsLocks: (repo: string) => [repo, "lfsLocks"] as const,
+  bisect: (repo: string) => [repo, "bisect"] as const,
+  /** Prefix for blame and file history, which depend on HEAD and the working tree. */
+  history: (repo: string) => [repo, "history"] as const,
 };
 
-const WORKTREE = new Set(["status", "working"]);
+const WORKTREE = new Set(["status", "working", "history", "lfs"]);
 const LIVE = new Set([
   "info",
   "refs",
@@ -35,6 +43,9 @@ const LIVE = new Set([
   "headMessage",
   "pendingMessage",
   "journal",
+  "worktrees",
+  "flow",
+  "bisect",
   ...WORKTREE,
 ]);
 

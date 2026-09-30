@@ -10,10 +10,14 @@ export interface Search {
 /** `selected` value for the uncommitted-changes row. */
 export const WORKING_COPY = "working-copy";
 
-/** A file whose diff replaces the graph. */
+/** A file whose diff (or conflict, blame, history) replaces the graph. */
 export type OpenFile =
   | { kind: "commit"; oid: string; file: FileChange }
-  | { kind: "working"; path: string; staged: boolean };
+  | { kind: "working"; path: string; staged: boolean }
+  | { kind: "conflict"; path: string }
+  /** `rev` null blames the working tree. */
+  | { kind: "blame"; path: string; rev: string | null }
+  | { kind: "history"; path: string };
 
 /** What the user is looking at in one repository tab. */
 export interface RepoView {
@@ -21,9 +25,11 @@ export interface RepoView {
   selected: string | null;
   openFile: OpenFile | null;
   search: Search | null;
+  /** An interactive rebase being planned, onto `base` (the root when null). */
+  rebase: { base: string | null } | null;
 }
 
-const empty: RepoView = { selected: null, openFile: null, search: null };
+const empty: RepoView = { selected: null, openFile: null, search: null, rebase: null };
 
 interface ViewState {
   views: Record<string, RepoView>;

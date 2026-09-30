@@ -10,7 +10,8 @@ import { formatDate, relativeTime } from "../../lib/time";
 import { Avatar } from "../../ui/Avatar";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { countChanges, useWorkingStatus } from "../changes/queries";
-import { useGitActions, type GitActions } from "../ops/actions";
+import { shortRev, useGitActions, type GitActions } from "../ops/actions";
+import { dropProps, useDrag } from "../ops/drag";
 import { commitMenu, type RepoContext } from "../ops/menus";
 import { useRepoContext } from "../ops/queries";
 import { keys, useRepoInfo, useUiPrefs } from "../workspace/queries";
@@ -228,6 +229,7 @@ const Row = memo(function Row({
   ctx,
   actions,
 }: RowProps) {
+  const over = useDrag((s) => s.over !== null && s.over === row.oid);
   return (
     <ContextMenu
       items={[
@@ -241,10 +243,12 @@ const Row = memo(function Row({
         role="row"
         aria-selected={selected}
         onMouseDown={() => onSelect(row.oid)}
+        {...dropProps({ kind: "commit", name: shortRev(row.oid), fullName: row.oid, oid: row.oid })}
         className={clsx(
           "flex h-full items-center transition-opacity",
           selected ? "bg-accent/20" : "hover:bg-hover",
           dimmed && "opacity-35",
+          over && "bg-accent/20 outline outline-1 -outline-offset-1 outline-accent",
         )}
       >
         <div style={{ width: graphWidth }} className="h-full shrink-0 overflow-hidden">

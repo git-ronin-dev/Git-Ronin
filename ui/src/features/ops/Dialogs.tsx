@@ -2,15 +2,19 @@ import { useQuery } from "@tanstack/react-query";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { useState, type ReactNode } from "react";
 
+import type { FlowConfig } from "../../bindings/FlowConfig";
+import type { FlowKind } from "../../bindings/FlowKind";
 import { ipc } from "../../lib/ipc";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { Checkbox, Field, Select, TextInput } from "../../ui/Field";
 import { toast } from "../../ui/toast-store";
-import { useConfig, useRefs } from "../workspace/queries";
+import { useConfig, useRefs, useRepoInfo } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";
 import { useGitActions } from "./actions";
 import { useDialogs, type DialogRequest } from "./dialogs";
+import { branchPrefixes } from "./prefixes";
+import { useFlowConfig } from "./queries";
 import { startTask, useTask } from "./tasks";
 
 type Of<K extends DialogRequest["kind"]> = Extract<DialogRequest, { kind: K }>;
@@ -36,6 +40,18 @@ export function Dialogs() {
       return <UpstreamDialog key={key} {...request} onClose={close} />;
     case "clone":
       return <CloneDialog key={key} onClose={close} />;
+    case "addWorktree":
+      return <AddWorktree key={key} {...request} onClose={close} />;
+    case "addSubmodule":
+      return <AddSubmodule key={key} {...request} onClose={close} />;
+    case "lfsTrack":
+      return <LfsTrack key={key} {...request} onClose={close} />;
+    case "flowInit":
+      return <FlowInit key={key} {...request} onClose={close} />;
+    case "flowStart":
+      return <FlowStart key={key} {...request} onClose={close} />;
+    case "flowFinish":
+      return <FlowFinish key={key} {...request} onClose={close} />;
   }
 }
 
@@ -107,6 +123,7 @@ function CreateBranch({
   const actions = useGitActions(repo);
   const [name, setName] = useState("");
   const [checkout, setCheckout] = useState(true);
+  const prefixes = branchPrefixes(useRefs(repo).data, useFlowConfig(repo).data ?? null);
   return (
     <FormDialog
       title="Create branch"
@@ -118,6 +135,13 @@ function CreateBranch({
       <Field label="Name" hint={`Starts at ${startLabel}`}>
         <TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </Field>
+      {prefixes.length > 0 && (
+        <PrefixChips
+          prefixes={prefixes}
+          name={name}
+          onPick={(prefix) => setName(withPrefix(name, prefix, prefixes))}
+        />
+      )}
       <Checkbox label="Check it out" checked={checkout} onChange={setCheckout} />
     </FormDialog>
   );
@@ -388,6 +412,317 @@ function CloneDialog({ onClose }: { onClose: () => void }) {
           <p className="truncate text-xs text-fg-faint">{task.message ?? "Starting…"}</p>
         </div>
       )}
+    </FormDialog>
+  );
+}
+
+/** Replaces `name`'s prefix (one of `prefixes`, if it has one) with `prefix`. */
+function withPrefix(name: string, prefix: string, prefixes: string[]): string {
+  const current = prefixes.find((p) => name.startsWith(p));
+  const rest = current ? name.slice(current.length) : name;
+  return current === prefix ? rest : prefix + rest;
+}
+
+function PrefixChips({
+  prefixes,
+  name,
+  onPick,
+}: {
+  prefixes: string[];
+  name: string;
+  onPick: (prefix: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Prefixes">
+      {prefixes.map((p) => (
+        <button
+          key={p}
+          type="button"
+          aria-pressed={name.startsWith(p)}
+          onClick={() => onPick(p)}
+          className={
+            name.startsWith(p)
+              ? "rounded-sm border border-accent bg-accent/20 px-1.5 text-xs text-fg"
+              : "rounded-sm border border-line px-1.5 text-xs text-fg-muted hover:text-fg"
+          }
+        >
+          {p}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A folder next to the repository, e.g. `/work/app` + `topic` gives `/work/app-topic`. */
+function siblingFolder(repo: string, branch: string): string {
+  const separator = repo.includes("\\") && !repo.includes("/") ? "\\" : "/";
+  const safe = branch.replace(/[\\/:*?"<>|]+/g, "-");
+  return `${repo.replace(/[\\/]+$/, "")}-${safe}`.replace(/[\\/]/g, separator);
+}
+
+function AddWorktree({ repo, branch, onClose }: Of<"addWorktree"> & { onClose: () => void }) {
+  const actions = useGitActions(repo);
+  const refs = useRefs(repo).data;
+  const available = (refs?.local ?? []).filter((b) => !b.isHead && !b.worktree).map((b) => b.name);
+  const [create, setCreate] = useState(branch === null);
+  const [name, setName] = useState(branch ?? "");
+  const [existing, setExisting] = useState(branch ?? available[0] ?? "");
+  const chosen = create ? name.trim() : existing;
+  const [dest, setDest] = useState<string | null>(null);
+  const folder = dest ?? (chosen ? siblingFolder(repo, chosen) : "");
+
+  const browse = async () => {
+    const picked = await pickFolder({ directory: true, title: "Working tree folder" });
+    if (picked) setDest(picked);
+  };
+  const submit = async () => {
+    const ok = await actions.addWorktree(folder, chosen, create, null);
+    if (ok) toast.success("Created the working tree", folder);
+    return ok;
+  };
+  return (
+    <FormDialog
+      title="Add working tree"
+      submitLabel="Create"
+      blocker={!chosen ? "Choose a branch" : !folder ? "Choose a folder" : null}
+      onSubmit={submit}
+      onClose={onClose}
+    >
+      <p>A second folder with its own checkout of this repository, sharing its history.</p>
+      <Checkbox label="Create a new branch (from HEAD)" checked={create} onChange={setCreate} />
+      {create ? (
+        <Field label="New branch">
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+      ) : (
+        <Field label="Branch" hint="Branches checked out elsewhere can't be used.">
+          <Select value={existing} onChange={(e) => setExisting(e.target.value)}>
+            {available.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+      <Field label="Folder" hint="Created if it doesn't exist; must be empty if it does.">
+        <div className="flex gap-2">
+          <TextInput value={folder} onChange={(e) => setDest(e.target.value)} />
+          <Button type="button" onClick={() => void browse()}>
+            Browse…
+          </Button>
+        </div>
+      </Field>
+    </FormDialog>
+  );
+}
+
+function AddSubmodule({ repo, onClose }: Of<"addSubmodule"> & { onClose: () => void }) {
+  const actions = useGitActions(repo);
+  const [url, setUrl] = useState("");
+  const [path, setPath] = useState<string | null>(null);
+  const suggested = useQuery({
+    queryKey: ["cloneName", url.trim()],
+    queryFn: () => ipc.cloneName(url.trim()),
+    enabled: url.trim().length > 0,
+  }).data;
+  const folder = path ?? suggested ?? "";
+  const submit = async () => {
+    const ok = await actions.addSubmodule(url.trim(), folder.trim());
+    if (ok) toast.success(`Added submodule ${folder}`, "It is staged, ready to commit.");
+    return ok;
+  };
+  return (
+    <FormDialog
+      title="Add submodule"
+      submitLabel="Add"
+      blocker={!url.trim() ? "Enter a URL" : !folder.trim() ? "Enter a path" : null}
+      onSubmit={submit}
+      onClose={onClose}
+    >
+      <Field label="URL">
+        <TextInput
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://github.com/owner/library.git"
+          autoFocus
+        />
+      </Field>
+      <Field label="Path" hint="Inside this repository, e.g. vendor/library.">
+        <TextInput value={folder} onChange={(e) => setPath(e.target.value)} />
+      </Field>
+    </FormDialog>
+  );
+}
+
+function LfsTrack({ repo, pattern, onClose }: Of<"lfsTrack"> & { onClose: () => void }) {
+  const actions = useGitActions(repo);
+  const [value, setValue] = useState(pattern);
+  const submit = async () => {
+    const ok = await actions.lfsTrack(value.trim());
+    if (ok)
+      toast.success(`Tracking ${value.trim()} with LFS`, "Commit .gitattributes to share it.");
+    return ok;
+  };
+  return (
+    <FormDialog
+      title="Track files with Git LFS"
+      submitLabel="Track"
+      blocker={value.trim() ? null : "Enter a pattern"}
+      onSubmit={submit}
+      onClose={onClose}
+    >
+      <Field
+        label="Pattern"
+        hint="Matching files are stored in LFS from now on; files already committed stay as they are."
+      >
+        <TextInput
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="*.psd"
+          autoFocus
+        />
+      </Field>
+    </FormDialog>
+  );
+}
+
+function FlowInit({ repo, onClose }: Of<"flowInit"> & { onClose: () => void }) {
+  const actions = useGitActions(repo);
+  const refs = useRefs(repo).data;
+  const names = refs?.local.map((b) => b.name) ?? [];
+  const [config, setConfig] = useState<FlowConfig>(() => ({
+    master: ["main", "master"].find((n) => names.includes(n)) ?? names[0] ?? "main",
+    develop: "develop",
+    featurePrefix: "feature/",
+    releasePrefix: "release/",
+    hotfixPrefix: "hotfix/",
+    versionTagPrefix: "",
+  }));
+  const set =
+    (key: keyof FlowConfig) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setConfig((c) => ({ ...c, [key]: e.target.value }));
+  return (
+    <FormDialog
+      title="Set up Git Flow"
+      submitLabel="Set up"
+      blocker={
+        !config.master || !config.develop.trim()
+          ? "Name both branches"
+          : config.master === config.develop.trim()
+            ? "Use two different branches"
+            : null
+      }
+      onSubmit={() => actions.flowInit({ ...config, develop: config.develop.trim() })}
+      onClose={onClose}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Production branch">
+          <Select value={config.master} onChange={set("master")}>
+            {names.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Development branch" hint="Created from production if missing.">
+          <TextInput value={config.develop} onChange={set("develop")} />
+        </Field>
+        <Field label="Feature prefix">
+          <TextInput value={config.featurePrefix} onChange={set("featurePrefix")} />
+        </Field>
+        <Field label="Release prefix">
+          <TextInput value={config.releasePrefix} onChange={set("releasePrefix")} />
+        </Field>
+        <Field label="Hotfix prefix">
+          <TextInput value={config.hotfixPrefix} onChange={set("hotfixPrefix")} />
+        </Field>
+        <Field label="Version tag prefix">
+          <TextInput
+            value={config.versionTagPrefix}
+            onChange={set("versionTagPrefix")}
+            placeholder="e.g. v"
+          />
+        </Field>
+      </div>
+    </FormDialog>
+  );
+}
+
+const FLOW_BASE: Record<FlowKind, "develop" | "master"> = {
+  feature: "develop",
+  release: "develop",
+  hotfix: "master",
+};
+
+function FlowStart({ repo, flow, onClose }: Of<"flowStart"> & { onClose: () => void }) {
+  const actions = useGitActions(repo);
+  const config = useFlowConfig(repo).data;
+  const [name, setName] = useState("");
+  if (!config) return null;
+  const prefix = {
+    feature: config.featurePrefix,
+    release: config.releasePrefix,
+    hotfix: config.hotfixPrefix,
+  }[flow];
+  const base = config[FLOW_BASE[flow]];
+  return (
+    <FormDialog
+      title={`Start ${flow}`}
+      submitLabel="Start"
+      blocker={name.trim() ? null : flow === "feature" ? "Enter a name" : "Enter a version"}
+      onSubmit={() => actions.flowStart(flow, name.trim())}
+      onClose={onClose}
+    >
+      <Field
+        label={flow === "feature" ? "Name" : "Version"}
+        hint={`Creates ${prefix}${name.trim() || "…"} from ${base} and checks it out.`}
+      >
+        <TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      </Field>
+    </FormDialog>
+  );
+}
+
+function FlowFinish({ repo, flow, branch, onClose }: Of<"flowFinish"> & { onClose: () => void }) {
+  const actions = useGitActions(repo);
+  const config = useFlowConfig(repo).data;
+  const info = useRepoInfo(repo).data;
+  const [message, setMessage] = useState("");
+  const [keep, setKeep] = useState(false);
+  if (!config) return null;
+  const prefix = {
+    feature: config.featurePrefix,
+    release: config.releasePrefix,
+    hotfix: config.hotfixPrefix,
+  }[flow];
+  const version = branch.slice(prefix.length);
+  const tag = `${config.versionTagPrefix}${version}`;
+  const into = flow === "feature" ? config.develop : `${config.master}, then ${config.develop}`;
+  return (
+    <FormDialog
+      title={`Finish ${branch}`}
+      submitLabel="Finish"
+      blocker={info?.operation ? "Finish the operation in progress first" : null}
+      onSubmit={() => actions.flowFinish(flow, branch, message.trim() || null, keep)}
+      onClose={onClose}
+    >
+      <p>
+        Merges {branch} into {into}
+        {flow !== "feature" && `, tagging ${config.master} as ${tag}`}. Uncommitted changes must not
+        be in the way. If a merge stops on conflicts, resolve them, commit, and finish again.
+      </p>
+      {flow !== "feature" && (
+        <Field label="Tag message (optional)">
+          <TextInput
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder={`${flow === "hotfix" ? "Hotfix" : "Release"} ${version}`}
+          />
+        </Field>
+      )}
+      <Checkbox label={`Keep ${branch} afterwards`} checked={keep} onChange={setKeep} />
     </FormDialog>
   );
 }

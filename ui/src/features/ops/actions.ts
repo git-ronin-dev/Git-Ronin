@@ -1,9 +1,13 @@
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import type { BisectMark } from "../../bindings/BisectMark";
+import type { FlowConfig } from "../../bindings/FlowConfig";
+import type { FlowKind } from "../../bindings/FlowKind";
 import type { Outcome } from "../../bindings/Outcome";
 import type { PullMode } from "../../bindings/PullMode";
 import type { PushTarget } from "../../bindings/PushTarget";
+import type { RebaseStep } from "../../bindings/RebaseStep";
 import type { Refs } from "../../bindings/Refs";
 import type { ResetMode } from "../../bindings/ResetMode";
 import { ipc } from "../../lib/ipc";
@@ -66,13 +70,19 @@ export function gitActions(client: QueryClient, repo: string) {
   const simple = async (failure: string, action: () => Promise<unknown>, task?: string) =>
     (await run(failure, action, task)).ok;
 
-  /** Stops on conflicts are not failures, but the user has work to do. */
+  /** Stops are not failures, but the user has work to do. */
   const outcome = async (what: string, action: () => Promise<Outcome>, task?: string) => {
     const result = await run(`Could not ${what.toLowerCase()}`, action, task);
     if (result.ok && result.value === "conflicts") {
       toast.info(
         `${what} stopped on conflicts`,
         "Resolve them in the uncommitted changes, then continue or abort.",
+      );
+      updateView(repo, { selected: WORKING_COPY, openFile: null });
+    } else if (result.ok && result.value === "stopped") {
+      toast.info(
+        `${what} stopped`,
+        "Make your changes (amend the commit, or add new ones), then continue.",
       );
       updateView(repo, { selected: WORKING_COPY, openFile: null });
     }
@@ -288,6 +298,115 @@ export function gitActions(client: QueryClient, repo: string) {
         if (!ok) return false;
       }
       return simple("Could not reset", () => ipc.reset(repo, rev, mode));
+    },
+
+    interactiveRebase: (base: string | null, head: string, steps: RebaseStep[]) =>
+      outcome("Interactive rebase", () => ipc.interactiveRebase(repo, base, head, steps)),
+
+    bisect: (mark: BisectMark, rev: string) =>
+      simple("Could not mark the commit", () => ipc.bisectMark(repo, mark, rev)),
+
+    /** Ends the bisect and checks out where it started. */
+    endBisect: () => simple("Could not end the bisect", () => ipc.resolveOperation(repo, "abort")),
+
+    flowInit: (config: FlowConfig) =>
+      simple("Could not set up Git Flow", () => ipc.flowInit(repo, config)),
+
+    flowStart: (kind: FlowKind, name: string) =>
+      simple(`Could not start the ${kind}`, () => ipc.flowStart(repo, kind, name)),
+
+    flowFinish: (kind: FlowKind, branch: string, tagMessage: string | null, keep: boolean) =>
+      outcome(`Finish ${branch}`, () => ipc.flowFinish({ repo, kind, branch, tagMessage, keep })),
+
+    addWorktree: (dest: string, branch: string, create: boolean, start: string | null) =>
+      simple("Could not create the working tree", () =>
+        ipc.addWorktree({ repo, dest, branch, create, start }),
+      ),
+
+    removeWorktree: async (path: string) => {
+      const ok = await confirm({
+        title: "Remove working tree",
+        message: `Delete the working tree at ${path}? Its branch stays.`,
+        confirmLabel: "Remove",
+        danger: true,
+      });
+      if (!ok) return false;
+      try {
+        await ipc.removeWorktree(repo, path, false);
+        return true;
+      } catch (err) {
+        const dirty = /modified or untracked|contains modified|is dirty|locked/i.test(String(err));
+        if (!dirty) {
+          toast.error("Could not remove the working tree", String(err));
+          return false;
+        }
+      } finally {
+        void invalidateRepo(client, repo);
+      }
+      const force = await confirm({
+        title: "Working tree has changes",
+        message: `${path} has uncommitted changes or untracked files, or is locked. Remove it anyway? The changes are lost.`,
+        confirmLabel: "Remove anyway",
+        danger: true,
+      });
+      return (
+        force &&
+        simple("Could not remove the working tree", () => ipc.removeWorktree(repo, path, true))
+      );
+    },
+
+    pruneWorktrees: () => simple("Could not prune working trees", () => ipc.pruneWorktrees(repo)),
+
+    addSubmodule: (url: string, path: string) =>
+      simple(
+        "Could not add the submodule",
+        () => ipc.addSubmodule(repo, url, path),
+        "Adding submodule",
+      ),
+
+    updateSubmodules: (paths: string[]) =>
+      simple(
+        "Could not update submodules",
+        () => ipc.updateSubmodules(repo, paths),
+        paths.length === 1 ? `Updating ${paths[0]}` : "Updating submodules",
+      ),
+
+    lfsInit: () => simple("Could not set up Git LFS", () => ipc.lfsInit(repo)),
+
+    lfsTrack: (pattern: string) =>
+      simple("Could not track the pattern", () => ipc.lfsTrack(repo, pattern)),
+
+    lfsUntrack: (pattern: string, source: string) =>
+      simple("Could not untrack the pattern", () => ipc.lfsUntrack(repo, pattern, source)),
+
+    lfsLock: async (path: string) => {
+      const ok = await simple(
+        `Could not lock ${path}`,
+        () => ipc.lfsLock(repo, path),
+        `Locking ${path}`,
+      );
+      if (ok) toast.success(`Locked ${path}`);
+      void client.invalidateQueries({ queryKey: keys.lfsLocks(repo) });
+      return ok;
+    },
+
+    lfsUnlock: async (id: string, path: string, ours: boolean | null) => {
+      if (ours === false) {
+        const ok = await confirm({
+          title: "Unlock someone else's file",
+          message: `${path} is locked by someone else. Force the lock open? They may lose work if they push changes to it.`,
+          confirmLabel: "Force unlock",
+          danger: true,
+        });
+        if (!ok) return false;
+      }
+      const ok = await simple(
+        `Could not unlock ${path}`,
+        () => ipc.lfsUnlock(repo, id, ours === false),
+        `Unlocking ${path}`,
+      );
+      void client.invalidateQueries({ queryKey: keys.lfsLocks(repo) });
+      return ok;
     },
 
     continueOperation: () => outcome("Continue", () => ipc.resolveOperation(repo, "continue")),

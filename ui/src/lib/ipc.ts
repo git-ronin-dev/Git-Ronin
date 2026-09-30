@@ -1,18 +1,27 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import type { BisectMark } from "../bindings/BisectMark";
+import type { BisectState } from "../bindings/BisectState";
+import type { Blame } from "../bindings/Blame";
 import type { BlobSource } from "../bindings/BlobSource";
 import type { CommitDetail } from "../bindings/CommitDetail";
 import type { CommitOptions } from "../bindings/CommitOptions";
 import type { CommitResult } from "../bindings/CommitResult";
 import type { Config } from "../bindings/Config";
+import type { Conflict } from "../bindings/Conflict";
 import type { DiffOptions } from "../bindings/DiffOptions";
+import type { FileCommit } from "../bindings/FileCommit";
 import type { FileDiff } from "../bindings/FileDiff";
+import type { FlowConfig } from "../bindings/FlowConfig";
+import type { FlowKind } from "../bindings/FlowKind";
 import type { GitVersion } from "../bindings/GitVersion";
 import type { GraphPage } from "../bindings/GraphPage";
 import type { Hunk } from "../bindings/Hunk";
 import type { IgnoreScope } from "../bindings/IgnoreScope";
 import type { JournalState } from "../bindings/JournalState";
+import type { LfsLock } from "../bindings/LfsLock";
+import type { LfsStatus } from "../bindings/LfsStatus";
 import type { LineSelection } from "../bindings/LineSelection";
 import type { OperationAction } from "../bindings/OperationAction";
 import type { Outcome } from "../bindings/Outcome";
@@ -20,13 +29,17 @@ import type { PatchTarget } from "../bindings/PatchTarget";
 import type { PullMode } from "../bindings/PullMode";
 import type { PushOutcome } from "../bindings/PushOutcome";
 import type { PushTarget } from "../bindings/PushTarget";
+import type { RebasePlan } from "../bindings/RebasePlan";
+import type { RebaseStep } from "../bindings/RebaseStep";
 import type { Refs } from "../bindings/Refs";
 import type { RepoInfo } from "../bindings/RepoInfo";
 import type { ResetMode } from "../bindings/ResetMode";
+import type { Resolution } from "../bindings/Resolution";
 import type { StashOptions } from "../bindings/StashOptions";
 import type { StatusEntry } from "../bindings/StatusEntry";
 import type { UiPrefs } from "../bindings/UiPrefs";
 import type { WorkingStatus } from "../bindings/WorkingStatus";
+import type { Worktree } from "../bindings/Worktree";
 
 /** Typed wrappers for the Rust commands in src-tauri/src/commands.rs. */
 export const ipc = {
@@ -149,6 +162,63 @@ export const ipc = {
   resolveOperation: (repo: string, action: OperationAction) =>
     invoke<Outcome>("resolve_operation", { repo, action }),
   pendingMessage: (repo: string) => invoke<string | null>("pending_message", { repo }),
+
+  conflict: (repo: string, path: string) => invoke<Conflict>("conflict", { repo, path }),
+  resolveConflict: (repo: string, path: string, resolution: Resolution) =>
+    invoke<void>("resolve_conflict", { repo, path, resolution }),
+
+  rebasePlan: (repo: string, base: string | null) =>
+    invoke<RebasePlan>("rebase_plan", { repo, base }),
+  interactiveRebase: (repo: string, base: string | null, head: string, steps: RebaseStep[]) =>
+    invoke<Outcome>("interactive_rebase", { repo, base, head, steps }),
+
+  blame: (repo: string, path: string, rev: string | null, ignoreWhitespace: boolean) =>
+    invoke<Blame>("blame", { repo, path, rev, ignoreWhitespace }),
+  fileLog: (repo: string, path: string, rev: string | null, skip: number, limit: number) =>
+    invoke<FileCommit[]>("file_log", { repo, path, rev, skip, limit }),
+
+  addSubmodule: (repo: string, url: string, path: string) =>
+    invoke<void>("add_submodule", { repo, url, path }),
+  updateSubmodules: (repo: string, paths: string[]) =>
+    invoke<void>("update_submodules", { repo, paths }),
+
+  listWorktrees: (repo: string) => invoke<Worktree[]>("list_worktrees", { repo }),
+  addWorktree: (args: {
+    repo: string;
+    dest: string;
+    branch: string;
+    create: boolean;
+    start: string | null;
+  }) => invoke<void>("add_worktree", args),
+  removeWorktree: (repo: string, path: string, force: boolean) =>
+    invoke<void>("remove_worktree", { repo, path, force }),
+  pruneWorktrees: (repo: string) => invoke<void>("prune_worktrees", { repo }),
+
+  lfsStatus: (repo: string) => invoke<LfsStatus>("lfs_status", { repo }),
+  lfsInit: (repo: string) => invoke<void>("lfs_init", { repo }),
+  lfsTrack: (repo: string, pattern: string) => invoke<void>("lfs_track", { repo, pattern }),
+  lfsUntrack: (repo: string, pattern: string, source: string) =>
+    invoke<void>("lfs_untrack", { repo, pattern, source }),
+  lfsLocks: (repo: string) => invoke<LfsLock[]>("lfs_locks", { repo }),
+  lfsLock: (repo: string, path: string) => invoke<void>("lfs_lock", { repo, path }),
+  lfsUnlock: (repo: string, id: string, force: boolean) =>
+    invoke<void>("lfs_unlock", { repo, id, force }),
+
+  flowConfig: (repo: string) => invoke<FlowConfig | null>("flow_config", { repo }),
+  flowInit: (repo: string, config: FlowConfig) => invoke<void>("flow_init", { repo, config }),
+  flowStart: (repo: string, kind: FlowKind, name: string) =>
+    invoke<void>("flow_start", { repo, kind, name }),
+  flowFinish: (args: {
+    repo: string;
+    kind: FlowKind;
+    branch: string;
+    tagMessage: string | null;
+    keep: boolean;
+  }) => invoke<Outcome>("flow_finish", args),
+
+  bisectState: (repo: string) => invoke<BisectState | null>("bisect_state", { repo }),
+  bisectMark: (repo: string, mark: BisectMark, rev: string) =>
+    invoke<void>("bisect_mark", { repo, mark, rev }),
 
   credentialRespond: (id: number, answer: string | null) =>
     invoke<void>("credential_respond", { id, answer }),

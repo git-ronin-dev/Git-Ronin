@@ -29,12 +29,15 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
   const operation = info?.operation ?? null;
   // A commit concludes a stopped merge, cherry-pick or revert.
   const concludes = operation === "merge" || operation === "cherryPick" || operation === "revert";
+  // A rebase stopped at an `edit` step waits for the commit to be amended
+  // (or for new commits) before it continues.
+  const editing = operation === "rebase" && !!info?.rebase?.editing;
   const [busy, setBusy] = useState(false);
   usePrefill(repo, concludes);
 
   const message = composeMessage(draft);
   const blocker =
-    operation !== null && !concludes
+    operation !== null && !concludes && !editing
       ? "Use Continue above to go on"
       : conflicts > 0
         ? "Resolve conflicts first"
@@ -128,12 +131,12 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
         rows={4}
         className="block w-full resize-y rounded-md border border-line bg-canvas px-2 py-1.5 outline-none focus:border-accent"
       />
-      <div className="flex gap-4 text-xs text-fg-muted">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs whitespace-nowrap text-fg-muted">
         <label className="flex items-center gap-1.5">
           <input
             type="checkbox"
             checked={draft.amend}
-            disabled={unborn || operation !== null}
+            disabled={unborn || (operation !== null && !editing)}
             onChange={(e) => void toggleAmend(e.target.checked)}
           />
           Amend previous commit

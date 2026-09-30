@@ -2,10 +2,10 @@ import { create } from "zustand";
 
 import type { GitActions } from "./actions";
 
-/** A branch that can be dragged or dropped on. */
+/** A branch that can be dragged or dropped on, or a commit to drop on. */
 export interface DragRef {
-  kind: "local" | "remote";
-  /** Short name: `main`, or `origin/main` for a remote branch. */
+  kind: "local" | "remote" | "commit";
+  /** Short name: `main`, `origin/main` for a remote branch, an abbreviated commit id. */
   name: string;
   fullName: string;
   oid: string;
@@ -28,6 +28,24 @@ export function dropActions(source: DragRef, target: DragRef, head: string | nul
   if (source.fullName === target.fullName) return [];
   const s = source.name;
   const t = target.name;
+
+  if (target.kind === "commit") {
+    // Remote branches only move by fetching.
+    if (source.kind !== "local" || source.oid === target.oid) return [];
+    if (source.name === head) {
+      return [
+        { label: `Rebase ${s} onto ${t}`, run: (a) => a.rebase(target.oid, s) },
+        { label: `Reset ${s} to ${t}`, run: (a) => a.reset(target.oid, "mixed", s) },
+      ];
+    }
+    return [
+      { label: `Move ${s} to ${t}`, run: (a) => a.moveBranch(s, target.oid) },
+      {
+        label: `Check out ${s} and rebase it onto ${t}`,
+        run: async (a) => (await a.checkout(s)) && a.rebase(target.oid, s),
+      },
+    ];
+  }
 
   if (target.kind === "remote") {
     if (source.kind !== "local" || !target.remote || !target.branch) return [];

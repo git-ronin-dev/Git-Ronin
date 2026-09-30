@@ -18,7 +18,7 @@ export function DragLayer() {
         >
           <GitBranch className="size-3" />
           {dragging.source.name}
-          {!over && <span className="text-fg-faint">— drop on a branch</span>}
+          {!over && <span className="text-fg-faint">— drop on a branch or commit</span>}
         </div>
       )}
       {dropped && repo && <DropMenu key={`${dropped.x},${dropped.y}`} repo={repo} />}

@@ -86,6 +86,20 @@ export function CommitPanel({ repo }: { repo: string }) {
             openFile?.kind === "commit" && openFile.oid === d.oid ? openFile.file.path : null
           }
           onOpen={(file) => updateView(repo, { openFile: { kind: "commit", oid: d.oid, file } })}
+          menu={(file) => [
+            {
+              label: "Blame at this commit",
+              disabled: file.status === "deleted",
+              onSelect: () =>
+                updateView(repo, { openFile: { kind: "blame", path: file.path, rev: d.oid } }),
+            },
+            {
+              label: "File history",
+              onSelect: () => updateView(repo, { openFile: { kind: "history", path: file.path } }),
+            },
+            "separator",
+            { label: "Copy path", onSelect: () => void copyText(file.path, "Copied path") },
+          ]}
         />
       </div>
     </div>

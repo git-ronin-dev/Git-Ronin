@@ -2,8 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import {
   Archive,
-  Boxes,
-  ChevronRight,
   Cloud,
   Eye,
   EyeOff,
@@ -13,7 +11,7 @@ import {
   Search,
   Tag,
 } from "lucide-react";
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useState } from "react";
 
 import { copyText } from "../../lib/clipboard";
 import { ipc } from "../../lib/ipc";
@@ -29,8 +27,9 @@ import { localBranchMenu, remoteBranchMenu, remoteMenu, tagMenu } from "../ops/m
 import { useRepoContext } from "../ops/queries";
 import { useStashActions } from "../stash/actions";
 import { invalidateRepo, keys, useConfig, useRefs } from "../workspace/queries";
-import { useWorkspace } from "../workspace/store";
 import { updateView } from "../workspace/view";
+import { AddMenu, RepoSections, SubmoduleSection } from "./RepoSections";
+import { Folder, Leaf } from "./SidebarTree";
 import { buildTree, type TreeNode } from "./tree";
 
 const icon = "size-3.5";
@@ -92,6 +91,7 @@ export function Sidebar({ repo }: { repo: string }) {
           aria-label="Filter branches and tags"
           className="h-7 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-fg-faint"
         />
+        <AddMenu repo={repo} />
       </div>
       {graphFilter.solo.size > 0 && (
         <div className="flex items-center justify-between border-b border-line bg-accent/10 px-3 py-1.5 text-xs">
@@ -190,18 +190,8 @@ export function Sidebar({ repo }: { repo: string }) {
             </ContextMenu>
           ))}
         </Section>
-        <Section title="Submodules" icon={<Boxes className={icon} />} count={submodules.length}>
-          {submodules.map((s) => (
-            <Leaf
-              key={s.path}
-              depth={1}
-              title={`Open ${s.path}`}
-              onClick={() => void useWorkspace.getState().open(`${repo}/${s.path}`)}
-            >
-              <span className="truncate">{s.name}</span>
-            </Leaf>
-          ))}
-        </Section>
+        <SubmoduleSection repo={repo} submodules={submodules} />
+        <RepoSections repo={repo} />
       </div>
     </nav>
   );
@@ -364,89 +354,5 @@ function Tracking({
       {ahead > 0 && <span>↑{ahead}</span>}
       {behind > 0 && <span>↓{behind}</span>}
     </span>
-  );
-}
-
-const indent = (depth: number) => ({ paddingLeft: 8 + depth * 14 });
-
-function Folder({
-  name,
-  depth,
-  icon: folderIcon,
-  title,
-  menu,
-  children,
-}: {
-  name: string;
-  depth: number;
-  icon: ReactNode;
-  title?: string;
-  menu?: MenuItem[];
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(true);
-  const button = (
-    <button
-      type="button"
-      aria-expanded={open}
-      title={title}
-      onClick={() => setOpen(!open)}
-      style={indent(depth - 1)}
-      className="flex h-7 w-full items-center gap-1.5 pr-3 text-fg-muted hover:bg-hover hover:text-fg"
-    >
-      <ChevronRight
-        className={clsx("size-3.5 shrink-0 transition-transform", open && "rotate-90")}
-      />
-      {folderIcon}
-      <span className="truncate">{name}</span>
-    </button>
-  );
-  return (
-    <div>
-      {menu ? <ContextMenu items={menu}>{button}</ContextMenu> : button}
-      {open && children}
-    </div>
-  );
-}
-
-/** Extra props (and ref) are passed through so it can be a context menu trigger. */
-function Leaf({
-  depth,
-  title,
-  onClick,
-  dimmed,
-  highlighted,
-  trailing,
-  children,
-  ...rest
-}: {
-  depth: number;
-  title?: string;
-  onClick: () => void;
-  dimmed?: boolean;
-  /** A dragged branch is over it. */
-  highlighted?: boolean;
-  trailing?: ReactNode;
-  children: ReactNode;
-} & Omit<ComponentProps<"div">, "onClick" | "title" | "children">) {
-  return (
-    <div
-      {...rest}
-      role="button"
-      tabIndex={0}
-      title={title}
-      onClick={onClick}
-      onKeyDown={(e) => e.key === "Enter" && onClick()}
-      style={indent(depth)}
-      className={clsx(
-        "group flex h-7 cursor-default items-center gap-2 pr-3 hover:bg-hover",
-        dimmed && "opacity-45",
-        highlighted && "bg-accent/20 outline outline-1 -outline-offset-1 outline-accent",
-      )}
-    >
-      {children}
-      <span className="ml-auto" />
-      {trailing}
-    </div>
   );
 }

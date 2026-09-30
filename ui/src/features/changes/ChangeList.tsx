@@ -4,6 +4,9 @@ import { Check, Minus, Plus, Undo2, type LucideIcon } from "lucide-react";
 import type { StatusEntry } from "../../bindings/StatusEntry";
 import { copyText } from "../../lib/clipboard";
 import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
+import { useGitActions } from "../ops/actions";
+import { useLfsStatus } from "../ops/queries";
+import { updateView } from "../workspace/view";
 import { Badge } from "../commit/FileList";
 import { splitPath } from "../commit/lines";
 import { ignoreChoices } from "./ignore";
@@ -24,6 +27,8 @@ interface ChangeListProps {
 
 export function ChangeList({ repo, side, entries, activePath, onOpen }: ChangeListProps) {
   const actions = useWorkingActions(repo);
+  const git = useGitActions(repo);
+  const lfs = useLfsStatus(repo).data;
   const shown = entries.slice(0, MAX_SHOWN);
 
   return (
@@ -40,8 +45,33 @@ export function ChangeList({ repo, side, entries, activePath, onOpen }: ChangeLi
               ? [{ icon: Minus, label: "Unstage", run: () => void actions.unstage([entry]) }]
               : [{ icon: Check, label: "Mark resolved", run: () => void actions.stage([entry]) }];
 
+        const tracked = entry.status !== "untracked" && entry.status !== "added";
         const menu: MenuItem[] = [
+          ...(side === "conflicted"
+            ? [{ label: "Resolve in the merge editor", onSelect: () => onOpen(entry) }]
+            : []),
           ...buttons.map((b) => ({ label: b.label, onSelect: b.run })),
+          ...(tracked && side !== "conflicted"
+            ? [
+                "separator" as const,
+                {
+                  label: "Blame",
+                  onSelect: () =>
+                    updateView(repo, { openFile: { kind: "blame", path: entry.path, rev: null } }),
+                },
+                {
+                  label: "File history",
+                  onSelect: () =>
+                    updateView(repo, { openFile: { kind: "history", path: entry.path } }),
+                },
+              ]
+            : []),
+          ...(lfs?.initialized && entry.status !== "untracked" && entry.submodule === null
+            ? [
+                "separator" as const,
+                { label: "Lock (LFS)", onSelect: () => void git.lfsLock(entry.path) },
+              ]
+            : []),
           ...(entry.status === "untracked"
             ? [
                 "separator" as const,

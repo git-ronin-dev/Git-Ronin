@@ -18,6 +18,7 @@ vi.mock("../../lib/ipc", () => ({
   ipc: {
     pushBranch: vi.fn(),
     merge: vi.fn(),
+    interactiveRebase: vi.fn(),
     deleteBranch: vi.fn(),
     checkoutBranch: vi.fn(),
   },
@@ -97,6 +98,35 @@ describe("dropActions", () => {
     ]);
   });
 
+  it("moves or rebases a branch dropped on a commit", async () => {
+    const a = fakeActions();
+    const commit = (id: string): DragRef => ({
+      kind: "commit",
+      name: id.slice(0, 7),
+      fullName: id,
+      oid: id,
+    });
+    const target = commit("d".repeat(40));
+    const onHead = dropActions(local("main"), target, "main");
+    expect(onHead.map((x) => x.label)).toEqual([
+      "Rebase main onto ddddddd",
+      "Reset main to ddddddd",
+    ]);
+    void onHead[0]!.run(a);
+    expect(a.rebase).toHaveBeenCalledWith(target.oid, "main");
+
+    const other = dropActions(local("topic"), target, "main");
+    expect(other.map((x) => x.label)).toEqual([
+      "Move topic to ddddddd",
+      "Check out topic and rebase it onto ddddddd",
+    ]);
+    await other[1]!.run(a);
+    expect(a.checkout).toHaveBeenCalledWith("topic");
+    // Its own commit, or a remote branch: nothing to do.
+    expect(dropActions(local("topic"), commit(oid), "main")).toEqual([]);
+    expect(dropActions(remote, target, "main")).toEqual([]);
+  });
+
   it("pushes a local branch dropped on a remote one", () => {
     const a = fakeActions();
     const [push] = dropActions(local("feature"), remote, "main");
@@ -149,6 +179,21 @@ describe("menus", () => {
       refs,
     );
     expect(labels(commitMenu(a, detached, oid))).toContain("Cherry-pick onto HEAD");
+  });
+
+  it("rebases interactively and bisects from commits", () => {
+    const a = fakeActions();
+    const menu = commitMenu(a, ctx, oid);
+    find(menu, "Interactive rebase main onto this commit…").onSelect();
+    expect(useViews.getState().views["/work/ronin"]?.rebase).toEqual({ base: oid });
+    find(menu, "Start bisect: this commit is bad").onSelect();
+    expect(a.bisect).toHaveBeenCalledWith("bad", oid);
+
+    const bisecting = repoContext("/work/ronin", { ...repoInfo, operation: "bisect" }, refs);
+    const during = commitMenu(a, bisecting, oid);
+    expect(labels(during)).not.toContain("Start bisect: this commit is bad");
+    find(during, "Bisect: skip").onSelect();
+    expect(a.bisect).toHaveBeenCalledWith("skip", oid);
   });
 
   it("pushes and deletes tags per remote", () => {
@@ -211,6 +256,16 @@ describe("gitActions", () => {
     expect(useToasts.getState().items[0]).toMatchObject({
       kind: "info",
       title: "Merge topic into main stopped on conflicts",
+    });
+  });
+
+  it("says what to do when a rebase stops to edit a commit", async () => {
+    vi.mocked(ipc.interactiveRebase).mockResolvedValue("stopped");
+    expect(await actions.interactiveRebase(oid, oid, [])).toBe(true);
+    expect(useViews.getState().views["/work/ronin"]?.selected).toBe(WORKING_COPY);
+    expect(useToasts.getState().items[0]).toMatchObject({
+      kind: "info",
+      title: "Interactive rebase stopped",
     });
   });
 

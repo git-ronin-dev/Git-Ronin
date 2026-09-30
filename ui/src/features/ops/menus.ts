@@ -6,6 +6,8 @@ import type { RepoInfo } from "../../bindings/RepoInfo";
 import type { Tag } from "../../bindings/Tag";
 import { copyText } from "../../lib/clipboard";
 import type { MenuItem } from "../../ui/ContextMenu";
+import { useWorkspace } from "../workspace/store";
+import { updateView } from "../workspace/view";
 import { shortRev, type GitActions } from "./actions";
 import { openDialog } from "./dialogs";
 
@@ -18,6 +20,8 @@ export interface RepoContext {
   remoteNames: string[];
   /** A merge, rebase, … is waiting; history actions would fail. */
   busy: boolean;
+  /** The operation waiting is a bisect. */
+  bisecting: boolean;
 }
 
 export function repoContext(repo: string, info?: RepoInfo, refs?: Refs): RepoContext {
@@ -27,6 +31,7 @@ export function repoContext(repo: string, info?: RepoInfo, refs?: Refs): RepoCon
     localNames: refs?.local.map((b) => b.name) ?? [],
     remoteNames: refs?.remotes.map((r) => r.name) ?? [],
     busy: !!info?.operation,
+    bisecting: info?.operation === "bisect",
   };
 }
 
@@ -37,7 +42,22 @@ export function localBranchMenu(a: GitActions, ctx: RepoContext, b: LocalBranch)
   const current = b.name === ctx.head;
   const head = headLabel(ctx);
   const items: MenuItem[] = [
-    { label: `Check out ${b.name}`, disabled: current, onSelect: () => void a.checkout(b.name) },
+    {
+      label: `Check out ${b.name}`,
+      // A branch checked out in another working tree can't be checked out here too.
+      disabled: current || !!b.worktree,
+      onSelect: () => void a.checkout(b.name),
+    },
+    b.worktree
+      ? {
+          label: "Open its working tree",
+          onSelect: () => void useWorkspace.getState().open(b.worktree!),
+        }
+      : {
+          label: "Check out in a new working tree…",
+          disabled: current,
+          onSelect: () => openDialog({ kind: "addWorktree", repo: ctx.repo, branch: b.name }),
+        },
   ];
   if (!current) {
     items.push(
@@ -171,10 +191,40 @@ export function commitMenu(a: GitActions, ctx: RepoContext, oid: string): MenuIt
     },
     { label: "Revert", disabled: ctx.busy, onSelect: () => void a.revert(oid) },
     { label: `Merge into ${head}`, disabled: ctx.busy, onSelect: () => void a.merge(oid, head) },
+    {
+      label: `Interactive rebase ${head} onto this commit…`,
+      disabled: ctx.busy,
+      onSelect: () => updateView(ctx.repo, { rebase: { base: oid }, openFile: null }),
+    },
     "separator",
     reset("soft", "keep changes staged"),
     reset("mixed", "keep changes unstaged"),
     reset("hard", "discard changes…"),
+    "separator",
+    ...bisectItems(a, ctx, oid),
+  ];
+}
+
+/** Marking commits for a bisect, which the first mark starts. */
+function bisectItems(a: GitActions, ctx: RepoContext, oid: string): MenuItem[] {
+  if (ctx.bisecting) {
+    return [
+      { label: "Bisect: mark as bad", onSelect: () => void a.bisect("bad", oid) },
+      { label: "Bisect: mark as good", onSelect: () => void a.bisect("good", oid) },
+      { label: "Bisect: skip", onSelect: () => void a.bisect("skip", oid) },
+    ];
+  }
+  return [
+    {
+      label: "Start bisect: this commit is bad",
+      disabled: ctx.busy,
+      onSelect: () => void a.bisect("bad", oid),
+    },
+    {
+      label: "Start bisect: this commit is good",
+      disabled: ctx.busy,
+      onSelect: () => void a.bisect("good", oid),
+    },
   ];
 }
 

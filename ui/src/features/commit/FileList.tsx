@@ -2,6 +2,7 @@ import { clsx } from "clsx";
 
 import type { FileChange } from "../../bindings/FileChange";
 import type { FileStatus } from "../../bindings/FileStatus";
+import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
 import { splitPath } from "./lines";
 
 const badges: Record<FileStatus, [string, string]> = {
@@ -20,33 +21,38 @@ interface FileListProps {
   files: FileChange[];
   activePath: string | null;
   onOpen: (file: FileChange) => void;
+  /** Right-click menu for a file. */
+  menu?: (file: FileChange) => MenuItem[];
 }
 
-export function FileList({ files, activePath, onOpen }: FileListProps) {
+export function FileList({ files, activePath, onOpen, menu }: FileListProps) {
   return (
     <ul role="listbox" aria-label="Changed files">
       {files.map((file) => {
         const [dir, name] = splitPath(file.path);
+        const button = (
+          <button
+            type="button"
+            role="option"
+            aria-selected={file.path === activePath}
+            title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+            onClick={() => onOpen(file)}
+            className={clsx(
+              "flex h-7 w-full items-center gap-2 px-3 text-left",
+              file.path === activePath ? "bg-accent/20" : "hover:bg-hover",
+            )}
+          >
+            <Badge status={file.status} />
+            <span className="min-w-0 flex-1 truncate">
+              <span className="text-fg-faint">{dir}</span>
+              {name}
+            </span>
+            <Stats file={file} />
+          </button>
+        );
         return (
           <li key={file.path}>
-            <button
-              type="button"
-              role="option"
-              aria-selected={file.path === activePath}
-              title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-              onClick={() => onOpen(file)}
-              className={clsx(
-                "flex h-7 w-full items-center gap-2 px-3 text-left",
-                file.path === activePath ? "bg-accent/20" : "hover:bg-hover",
-              )}
-            >
-              <Badge status={file.status} />
-              <span className="min-w-0 flex-1 truncate">
-                <span className="text-fg-faint">{dir}</span>
-                {name}
-              </span>
-              <Stats file={file} />
-            </button>
+            {menu ? <ContextMenu items={menu(file)}>{button}</ContextMenu> : button}
           </li>
         );
       })}

@@ -20,10 +20,17 @@ export function ChangesPanel({ repo }: { repo: string }) {
   const total = countChanges(s);
   const open = (entry: StatusEntry, side: Side) =>
     updateView(repo, {
-      openFile: { kind: "working", path: entry.path, staged: side === "staged" },
+      openFile:
+        side === "conflicted"
+          ? { kind: "conflict", path: entry.path }
+          : { kind: "working", path: entry.path, staged: side === "staged" },
     });
-  const activePath = (side: Side) =>
-    openFile?.kind === "working" && openFile.staged === (side === "staged") ? openFile.path : null;
+  const activePath = (side: Side) => {
+    if (side === "conflicted") return openFile?.kind === "conflict" ? openFile.path : null;
+    return openFile?.kind === "working" && openFile.staged === (side === "staged")
+      ? openFile.path
+      : null;
+  };
   const list = (side: Side, entries: StatusEntry[]) => (
     <ChangeList
       repo={repo}
@@ -49,7 +56,7 @@ export function ChangesPanel({ repo }: { repo: string }) {
           <Group
             title="Conflicts"
             count={s.conflicted.length}
-            hint="Resolve the markers in each file, then mark it resolved."
+            hint="Open a file to merge it, or fix the markers yourself and mark it resolved."
           >
             {list("conflicted", s.conflicted)}
           </Group>

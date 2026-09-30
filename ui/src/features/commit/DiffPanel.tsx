@@ -3,6 +3,7 @@ import { useCallback } from "react";
 
 import type { FileChange } from "../../bindings/FileChange";
 import { ipc } from "../../lib/ipc";
+import { Button } from "../../ui/Button";
 import { useUiPrefs } from "../workspace/queries";
 import { updateView } from "../workspace/view";
 import { DiffHeader, DiffViewControls } from "./DiffChrome";
@@ -44,6 +45,7 @@ export function DiffPanel({ repo, oid, file }: { repo: string; oid: string; file
     <div className="flex h-full flex-col">
       <DiffHeader path={file.path} oldPath={file.oldPath} onClose={close}>
         <Stats file={file} />
+        {file.status !== "deleted" && <FileTools repo={repo} path={file.path} rev={oid} />}
         {!image && <DiffViewControls />}
       </DiffHeader>
       <div className="min-h-0 flex-1 overflow-auto">
@@ -68,5 +70,28 @@ export function DiffPanel({ repo, oid, file }: { repo: string; oid: string; file
         )}
       </div>
     </div>
+  );
+}
+
+/** Buttons opening a file's blame (at `rev`, or the working copy) and history. */
+export function FileTools({ repo, path, rev }: { repo: string; path: string; rev: string | null }) {
+  const small = "h-6 px-2 text-xs";
+  return (
+    <>
+      <Button
+        variant="ghost"
+        className={small}
+        onClick={() => updateView(repo, { openFile: { kind: "blame", path, rev } })}
+      >
+        Blame
+      </Button>
+      <Button
+        variant="ghost"
+        className={small}
+        onClick={() => updateView(repo, { openFile: { kind: "history", path } })}
+      >
+        History
+      </Button>
+    </>
   );
 }

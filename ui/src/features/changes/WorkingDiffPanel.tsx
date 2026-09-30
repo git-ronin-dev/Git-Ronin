@@ -9,6 +9,7 @@ import type { StatusEntry } from "../../bindings/StatusEntry";
 import { ipc } from "../../lib/ipc";
 import { Button } from "../../ui/Button";
 import { DiffHeader, DiffViewControls } from "../commit/DiffChrome";
+import { FileTools } from "../commit/DiffPanel";
 import { DiffView, type Staging } from "../commit/DiffView";
 import { ImageDiff, type BlobRef } from "../commit/ImageDiff";
 import { isImage } from "../commit/lines";
@@ -119,6 +120,9 @@ export function WorkingDiffPanel({ repo, path, staged }: WorkingDiffPanelProps) 
               </button>
             ))}
           </div>
+        )}
+        {entry.status !== "untracked" && entry.status !== "added" && (
+          <FileTools repo={repo} path={path} rev={null} />
         )}
         <FileActions
           entry={entry}

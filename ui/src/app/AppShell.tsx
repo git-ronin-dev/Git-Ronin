@@ -5,8 +5,12 @@ import { ChangesPanel } from "../features/changes/ChangesPanel";
 import { WorkingDiffPanel } from "../features/changes/WorkingDiffPanel";
 import { CommitPanel } from "../features/commit/CommitPanel";
 import { DiffPanel } from "../features/commit/DiffPanel";
+import { ConflictEditor } from "../features/conflict/ConflictEditor";
 import { GraphView } from "../features/graph/GraphView";
+import { BlamePanel } from "../features/history/BlamePanel";
+import { FileHistoryPanel } from "../features/history/FileHistoryPanel";
 import { OperationBanner } from "../features/ops/OperationBanner";
+import { RebaseEditor } from "../features/rebase/RebaseEditor";
 import { Sidebar } from "../features/refs/Sidebar";
 import { useWorkspace } from "../features/workspace/store";
 import { WORKING_COPY, updateView, useRepoView } from "../features/workspace/view";
@@ -82,25 +86,42 @@ export function AppShell() {
   );
 }
 
-/** Graph, or the diff of an open file on top of it. */
+/** Graph, or an open file (or the interactive rebase editor) on top of it. */
 function RepoMain({ repo }: { repo: string }) {
-  const { openFile } = useRepoView(repo);
+  const { openFile, rebase } = useRepoView(repo);
   return (
     <div className="flex h-full flex-col">
       <OperationBanner repo={repo} />
       <div className="min-h-0 flex-1">
-        <div className={clsx("h-full", openFile && "hidden")}>
+        <div className={clsx("h-full", (openFile || rebase) && "hidden")}>
           <GraphView repo={repo} />
         </div>
-        {openFile?.kind === "commit" && (
-          <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />
-        )}
-        {openFile?.kind === "working" && (
-          <WorkingDiffPanel repo={repo} path={openFile.path} staged={openFile.staged} />
+        {rebase ? (
+          <RebaseEditor key={rebase.base ?? ""} repo={repo} base={rebase.base} />
+        ) : (
+          <OpenFileView repo={repo} />
         )}
       </div>
     </div>
   );
+}
+
+function OpenFileView({ repo }: { repo: string }) {
+  const { openFile } = useRepoView(repo);
+  switch (openFile?.kind) {
+    case "commit":
+      return <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />;
+    case "working":
+      return <WorkingDiffPanel repo={repo} path={openFile.path} staged={openFile.staged} />;
+    case "conflict":
+      return <ConflictEditor key={openFile.path} repo={repo} path={openFile.path} />;
+    case "blame":
+      return <BlamePanel repo={repo} path={openFile.path} rev={openFile.rev} />;
+    case "history":
+      return <FileHistoryPanel key={openFile.path} repo={repo} path={openFile.path} />;
+    case undefined:
+      return null;
+  }
 }
 
 /** Staging and commit composer for uncommitted changes, else the selected commit. */
