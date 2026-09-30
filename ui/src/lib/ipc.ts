@@ -1,16 +1,19 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import type { AccountView } from "../bindings/AccountView";
 import type { BisectMark } from "../bindings/BisectMark";
 import type { BisectState } from "../bindings/BisectState";
 import type { Blame } from "../bindings/Blame";
 import type { BlobSource } from "../bindings/BlobSource";
 import type { Change } from "../bindings/Change";
+import type { CiStatus } from "../bindings/CiStatus";
 import type { CommitDetail } from "../bindings/CommitDetail";
 import type { CommitOptions } from "../bindings/CommitOptions";
 import type { CommitResult } from "../bindings/CommitResult";
 import type { Config } from "../bindings/Config";
 import type { Conflict } from "../bindings/Conflict";
+import type { DeviceStart } from "../bindings/DeviceStart";
 import type { DiffOptions } from "../bindings/DiffOptions";
 import type { FileCommit } from "../bindings/FileCommit";
 import type { FileDiff } from "../bindings/FileDiff";
@@ -19,28 +22,40 @@ import type { FlowKind } from "../bindings/FlowKind";
 import type { GitPrefs } from "../bindings/GitPrefs";
 import type { GitVersion } from "../bindings/GitVersion";
 import type { GraphPage } from "../bindings/GraphPage";
+import type { HostedRepo } from "../bindings/HostedRepo";
 import type { Hunk } from "../bindings/Hunk";
 import type { Identity } from "../bindings/Identity";
 import type { IgnoreScope } from "../bindings/IgnoreScope";
 import type { ImportMode } from "../bindings/ImportMode";
+import type { Issue } from "../bindings/Issue";
 import type { JournalState } from "../bindings/JournalState";
+import type { Launchpad } from "../bindings/Launchpad";
 import type { LfsLock } from "../bindings/LfsLock";
 import type { LfsStatus } from "../bindings/LfsStatus";
 import type { LineSelection } from "../bindings/LineSelection";
+import type { MergeMethod } from "../bindings/MergeMethod";
+import type { NewPullRequest } from "../bindings/NewPullRequest";
 import type { OperationAction } from "../bindings/OperationAction";
 import type { Outcome } from "../bindings/Outcome";
 import type { PatchTarget } from "../bindings/PatchTarget";
+import type { PrSource } from "../bindings/PrSource";
 import type { Profile } from "../bindings/Profile";
+import type { ProviderKind } from "../bindings/ProviderKind";
 import type { PullMode } from "../bindings/PullMode";
+import type { PullRequest } from "../bindings/PullRequest";
+import type { PullRequestDetail } from "../bindings/PullRequestDetail";
 import type { PushOutcome } from "../bindings/PushOutcome";
 import type { PushTarget } from "../bindings/PushTarget";
+import type { RangeDiff } from "../bindings/RangeDiff";
 import type { RebasePlan } from "../bindings/RebasePlan";
 import type { RebaseStep } from "../bindings/RebaseStep";
 import type { Refs } from "../bindings/Refs";
 import type { RepoInfo } from "../bindings/RepoInfo";
+import type { RepoLink } from "../bindings/RepoLink";
 import type { RepoSummary } from "../bindings/RepoSummary";
 import type { ResetMode } from "../bindings/ResetMode";
 import type { Resolution } from "../bindings/Resolution";
+import type { SignIn } from "../bindings/SignIn";
 import type { SshKey } from "../bindings/SshKey";
 import type { StashOptions } from "../bindings/StashOptions";
 import type { StatusEntry } from "../bindings/StatusEntry";
@@ -99,6 +114,60 @@ export const ipc = {
   terminalResize: (id: number, cols: number, rows: number) =>
     invoke<void>("terminal_resize", { id, cols, rows }),
   terminalClose: (id: number) => invoke<void>("terminal_close", { id }),
+
+  hostingAccounts: () => invoke<AccountView[]>("hosting_accounts"),
+  /** The OAuth application built in for a service, if any. */
+  hostingClientId: (kind: ProviderKind, url: string) =>
+    invoke<string | null>("hosting_client_id", { kind, url }),
+  hostingSignIn: (kind: ProviderKind, url: string, login: string, token: string) =>
+    invoke<SignIn>("hosting_sign_in", { kind, url, login, token }),
+  hostingDeviceStart: (kind: ProviderKind, url: string, clientId: string) =>
+    invoke<DeviceStart>("hosting_device_start", { kind, url, clientId }),
+  /** Resolves once the user authorized the app in the browser. */
+  hostingDeviceWait: (flow: number) => invoke<SignIn>("hosting_device_wait", { flow }),
+  hostingDeviceCancel: (flow: number) => invoke<void>("hosting_device_cancel", { flow }),
+  hostingSignOut: (id: string) => invoke<void>("hosting_sign_out", { id }),
+  hostingMoveAccount: (id: string, profile: string) =>
+    invoke<void>("hosting_move_account", { id, profile }),
+  hostingRepos: (account: string) => invoke<HostedRepo[]>("hosting_repos", { account }),
+  hostingFork: (account: string, path: string) =>
+    invoke<HostedRepo>("hosting_fork", { account, path }),
+  hostingLinks: (repo: string) => invoke<RepoLink[]>("hosting_links", { repo }),
+  hostingPullRequests: (account: string, path: string) =>
+    invoke<PullRequest[]>("hosting_pull_requests", { account, path }),
+  hostingPullRequest: (account: string, path: string, number: number) =>
+    invoke<PullRequestDetail>("hosting_pull_request", { account, path, number }),
+  hostingCreatePullRequest: (account: string, path: string, pr: NewPullRequest) =>
+    invoke<PullRequest>("hosting_create_pull_request", { account, path, pr }),
+  hostingComment: (account: string, path: string, number: number, body: string) =>
+    invoke<void>("hosting_comment", { account, path, number, body }),
+  hostingApprove: (account: string, path: string, number: number) =>
+    invoke<void>("hosting_approve", { account, path, number }),
+  hostingMerge: (account: string, path: string, number: number, method: MergeMethod) =>
+    invoke<void>("hosting_merge", { account, path, number, method }),
+  hostingIssues: (account: string, path: string) =>
+    invoke<Issue[]>("hosting_issues", { account, path }),
+  hostingCreateIssue: (account: string, path: string, title: string, body: string) =>
+    invoke<Issue>("hosting_create_issue", { account, path, title, body }),
+  hostingCiStatus: (account: string, path: string, sha: string) =>
+    invoke<CiStatus>("hosting_ci_status", { account, path, sha }),
+  hostingAddSshKey: (account: string, title: string, key: string) =>
+    invoke<void>("hosting_add_ssh_key", { account, title, key }),
+  hostingLaunchpad: () => invoke<Launchpad>("hosting_launchpad"),
+  prFetch: (args: {
+    repo: string;
+    remote: string;
+    source: PrSource;
+    head: string | null;
+    base: string | null;
+    targetBranch: string;
+  }) => invoke<void>("pr_fetch", args),
+  rangeFiles: (repo: string, base: string, head: string) =>
+    invoke<RangeDiff>("range_files", { repo, base, head }),
+  branchIssue: (repo: string, branch: string) =>
+    invoke<string | null>("branch_issue", { repo, branch }),
+  setBranchIssue: (repo: string, branch: string, issue: string | null) =>
+    invoke<void>("set_branch_issue", { repo, branch, issue }),
 
   openRepo: (path: string) => invoke<RepoInfo>("open_repo", { path }),
   restoreTabs: () => invoke<RepoInfo[]>("restore_tabs"),

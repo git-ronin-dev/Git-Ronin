@@ -163,6 +163,19 @@ describe("menus", () => {
     });
   });
 
+  it("offers pull requests only when a remote is on a signed-in service", () => {
+    const a = fakeActions();
+    const [main] = refs.local;
+    expect(labels(localBranchMenu(a, ctx, main!))).not.toContain("Create pull request…");
+    const hosted = repoContext("/work/ronin", repoInfo, refs, true);
+    find(localBranchMenu(a, hosted, main!), "Create pull request…").onSelect();
+    expect(useDialogs.getState().request).toEqual({
+      kind: "createPullRequest",
+      repo: "/work/ronin",
+      branch: "main",
+    });
+  });
+
   it("offers history actions on commits and disables them mid-merge", () => {
     const a = fakeActions();
     const menu = commitMenu(a, ctx, oid);

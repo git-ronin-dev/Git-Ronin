@@ -1,13 +1,15 @@
 import { create } from "zustand";
 
 export type SettingsSection =
-  "general" | "diffs" | "git" | "profiles" | "keyboard" | "ssh" | "sync";
+  "general" | "diffs" | "git" | "profiles" | "accounts" | "keyboard" | "ssh" | "sync";
 
 /** App-wide dialogs and panels any command can open. */
 interface OverlayState {
   palette: boolean;
   settings: SettingsSection | null;
   workspaces: boolean;
+  /** Pull requests and issues across accounts. */
+  launchpad: boolean;
   /** Repository whose stash dialog is open. */
   stash: string | null;
   /** A settings file being imported. */
@@ -21,6 +23,7 @@ export const useOverlays = create<OverlayState>()(() => ({
   palette: false,
   settings: null,
   workspaces: false,
+  launchpad: false,
   stash: null,
   importPath: null,
   toggleSidebar: () => {},

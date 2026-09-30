@@ -8,6 +8,7 @@ import { CommitPanel } from "../features/commit/CommitPanel";
 import { DiffPanel } from "../features/commit/DiffPanel";
 import { ConflictEditor } from "../features/conflict/ConflictEditor";
 import { GraphView } from "../features/graph/GraphView";
+import { PullRequestView } from "../features/hosting/PullRequestView";
 import { BlamePanel } from "../features/history/BlamePanel";
 import { FileHistoryPanel } from "../features/history/FileHistoryPanel";
 import { OperationBanner } from "../features/ops/OperationBanner";
@@ -98,7 +99,7 @@ export function AppShell() {
 
 /** Graph, or an open file (or the interactive rebase editor) on top of it; the terminal below. */
 function RepoMain({ repo }: { repo: string }) {
-  const { openFile, rebase, terminal } = useRepoView(repo);
+  const { openFile, rebase, terminal, pullRequest } = useRepoView(repo);
   const panel = usePanelRef();
   // The shell starts the first time the terminal is shown and then keeps running.
   const [started, setStarted] = useState(terminal);
@@ -115,9 +116,19 @@ function RepoMain({ repo }: { repo: string }) {
     <div className="flex h-full flex-col">
       <OperationBanner repo={repo} />
       <div className="min-h-0 flex-1">
-        <div className={clsx("h-full", (openFile || rebase) && "hidden")}>
+        <div className={clsx("h-full", (openFile || rebase || pullRequest) && "hidden")}>
           <GraphView repo={repo} />
         </div>
+        {/* Kept while one of its files is open, so drafts and tabs survive. */}
+        {pullRequest && (
+          <div className={clsx("h-full", (openFile || rebase) && "hidden")}>
+            <PullRequestView
+              key={`${pullRequest.account}:${pullRequest.path}:${pullRequest.number}`}
+              repo={repo}
+              pr={pullRequest}
+            />
+          </div>
+        )}
         {rebase ? (
           <RebaseEditor key={rebase.base ?? ""} repo={repo} base={rebase.base} />
         ) : (
@@ -155,7 +166,7 @@ function OpenFileView({ repo }: { repo: string }) {
   const { openFile } = useRepoView(repo);
   switch (openFile?.kind) {
     case "commit":
-      return <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} />;
+      return <DiffPanel repo={repo} oid={openFile.oid} file={openFile.file} base={openFile.base} />;
     case "working":
       return <WorkingDiffPanel repo={repo} path={openFile.path} staged={openFile.staged} />;
     case "conflict":

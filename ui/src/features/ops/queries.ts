@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 import { ipc } from "../../lib/ipc";
 import { keys, useRefs, useRepoInfo } from "../workspace/queries";
+import { pickLink, useRepoLinks } from "../hosting/queries";
 import { repoContext, type RepoContext } from "./menus";
 
 /** The next undo and redo steps. */
@@ -54,5 +55,9 @@ export function useBisect(repo: string, enabled: boolean) {
 export function useRepoContext(repo: string): RepoContext {
   const info = useRepoInfo(repo).data;
   const refs = useRefs(repo).data;
-  return useMemo(() => repoContext(repo, info, refs), [repo, info, refs]);
+  const pullRequests = !!pickLink(useRepoLinks(repo).data, "pullRequests");
+  return useMemo(
+    () => repoContext(repo, info, refs, pullRequests),
+    [repo, info, refs, pullRequests],
+  );
 }

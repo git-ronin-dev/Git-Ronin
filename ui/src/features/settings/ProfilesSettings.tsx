@@ -39,7 +39,7 @@ export function ProfilesSettings() {
   return (
     <SettingsPage
       title="Profiles"
-      description="Each profile has its own author, signing key, SSH key and open tabs. Empty fields leave your git configuration in charge, and a repository's own settings still win."
+      description="Each profile has its own author, signing key, SSH key, accounts and open tabs. Empty fields leave your git configuration in charge, and a repository's own settings still win."
     >
       <div className="flex gap-4">
         <div className="w-44 shrink-0 space-y-1">

@@ -15,10 +15,21 @@ import { useCommitDetail } from "./queries";
 import { useEscape } from "./useEscape";
 
 /** Replaces the graph while a file from a commit is open. */
-export function DiffPanel({ repo, oid, file }: { repo: string; oid: string; file: FileChange }) {
+export function DiffPanel({
+  repo,
+  oid,
+  file,
+  base: givenBase,
+}: {
+  repo: string;
+  oid: string;
+  file: FileChange;
+  /** Diff against this commit instead of the first parent. */
+  base?: string;
+}) {
   const prefs = useUiPrefs();
-  const detail = useCommitDetail(repo, oid);
-  const base = detail.data ? (detail.data.parents[0] ?? null) : undefined;
+  const detail = useCommitDetail(repo, givenBase ? null : oid);
+  const base = givenBase ?? (detail.data ? (detail.data.parents[0] ?? null) : undefined);
   const image = isImage(file.path);
   const ignoreWhitespace = prefs?.ignoreWhitespace ?? false;
   const mode = prefs?.diffView ?? "unified";

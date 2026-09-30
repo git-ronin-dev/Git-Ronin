@@ -22,9 +22,16 @@ export interface RepoContext {
   busy: boolean;
   /** The operation waiting is a bisect. */
   bisecting: boolean;
+  /** A remote is on a signed-in service that takes pull requests. */
+  pullRequests: boolean;
 }
 
-export function repoContext(repo: string, info?: RepoInfo, refs?: Refs): RepoContext {
+export function repoContext(
+  repo: string,
+  info?: RepoInfo,
+  refs?: Refs,
+  pullRequests = false,
+): RepoContext {
   return {
     repo,
     head: info?.head.kind === "branch" ? info.head.name : null,
@@ -32,6 +39,7 @@ export function repoContext(repo: string, info?: RepoInfo, refs?: Refs): RepoCon
     remoteNames: refs?.remotes.map((r) => r.name) ?? [],
     busy: !!info?.operation,
     bisecting: info?.operation === "bisect",
+    pullRequests,
   };
 }
 
@@ -83,6 +91,15 @@ export function localBranchMenu(a: GitActions, ctx: RepoContext, b: LocalBranch)
       disabled: ctx.remoteNames.length === 0,
       onSelect: () => void a.push(b.name, b.upstream?.name ?? null),
     },
+    ...(ctx.pullRequests
+      ? [
+          {
+            label: "Create pull request…",
+            onSelect: () =>
+              openDialog({ kind: "createPullRequest", repo: ctx.repo, branch: b.name }),
+          },
+        ]
+      : []),
     {
       label: "Set upstream…",
       disabled: ctx.remoteNames.length === 0,

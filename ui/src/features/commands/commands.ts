@@ -5,6 +5,7 @@ import type { Config } from "../../bindings/Config";
 import type { JournalState } from "../../bindings/JournalState";
 import type { Refs } from "../../bindings/Refs";
 import type { RepoInfo } from "../../bindings/RepoInfo";
+import type { RepoLink } from "../../bindings/RepoLink";
 import type { SyncStatus } from "../../bindings/SyncStatus";
 import type { Theme } from "../../bindings/Theme";
 import type { UiPrefs } from "../../bindings/UiPrefs";
@@ -58,6 +59,13 @@ function refs(ctx: CommandContext) {
 
 function currentBranch(ctx: CommandContext) {
   return refs(ctx)?.local.find((b) => b.isHead);
+}
+
+/** A remote of the active repository on a signed-in service that can do `what`. */
+function link(ctx: CommandContext, what: "pullRequests" | "issues") {
+  if (!ctx.repo) return undefined;
+  const cached = ctx.client.getQueriesData<RepoLink[]>({ queryKey: keys.hostingLinks(ctx.repo) });
+  return cached.flatMap(([, links]) => links ?? []).find((l) => l.capabilities[what]);
 }
 
 type RepoContext = CommandContext & { repo: string };
@@ -240,6 +248,38 @@ export const COMMANDS: Command[] = [
     category: "Tabs",
     run: () => useOverlays.setState({ workspaces: true, palette: false }),
   },
+
+  {
+    id: "hosting.launchpad",
+    title: "Launchpad: my pull requests and issues",
+    category: "Hosting",
+    keys: ["Mod+Shift+L"],
+    inInput: true,
+    run: () => useOverlays.setState({ launchpad: true, palette: false }),
+  },
+  {
+    id: "settings.accounts",
+    title: "Accounts…",
+    category: "Hosting",
+    run: () => openSettings("accounts"),
+  },
+  repoCommand(
+    "hosting.createPullRequest",
+    "Create pull request…",
+    (_, ctx) =>
+      openDialog({
+        kind: "createPullRequest",
+        repo: ctx.repo,
+        branch: currentBranch(ctx)?.name ?? null,
+      }),
+    { category: "Hosting", enabled: (ctx) => !!link(ctx, "pullRequests") },
+  ),
+  repoCommand(
+    "hosting.createIssue",
+    "New issue…",
+    (_, ctx) => openDialog({ kind: "createIssue", repo: ctx.repo }),
+    { category: "Hosting", enabled: (ctx) => !!link(ctx, "issues") },
+  ),
 
   {
     id: "graph.search",

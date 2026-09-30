@@ -1,17 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import type { FlowConfig } from "../../bindings/FlowConfig";
 import type { FlowKind } from "../../bindings/FlowKind";
 import { ipc } from "../../lib/ipc";
 import { Button } from "../../ui/Button";
-import { Dialog } from "../../ui/Dialog";
 import { Checkbox, Field, Select, TextInput } from "../../ui/Field";
 import { toast } from "../../ui/toast-store";
 import { useConfig, useRefs, useRepoInfo } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";
+import { CreateIssue, CreatePullRequest } from "../hosting/HostingDialogs";
+import { RepoPicker } from "../hosting/RepoPicker";
 import { useGitActions } from "./actions";
+import { FormDialog } from "./FormDialog";
 import { useDialogs, type DialogRequest } from "./dialogs";
 import { branchPrefixes } from "./prefixes";
 import { useFlowConfig } from "./queries";
@@ -52,66 +54,11 @@ export function Dialogs() {
       return <FlowStart key={key} {...request} onClose={close} />;
     case "flowFinish":
       return <FlowFinish key={key} {...request} onClose={close} />;
+    case "createPullRequest":
+      return <CreatePullRequest key={key} {...request} onClose={close} />;
+    case "createIssue":
+      return <CreateIssue key={key} {...request} onClose={close} />;
   }
-}
-
-interface FormDialogProps {
-  title: string;
-  submitLabel: string;
-  /** Why the form can't be submitted yet, if it can't. */
-  blocker?: string | null;
-  /**
-   * Resolves to true when done, closing the dialog. Until then the dialog
-   * stays open and can't be dismissed.
-   */
-  onSubmit: () => Promise<boolean>;
-  onClose: () => void;
-  children: ReactNode;
-}
-
-function FormDialog({ title, submitLabel, blocker, onSubmit, onClose, children }: FormDialogProps) {
-  const [busy, setBusy] = useState(false);
-  const submit = async () => {
-    if (busy || blocker) return;
-    setBusy(true);
-    const done = await onSubmit();
-    setBusy(false);
-    if (done) onClose();
-  };
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => !open && !busy && onClose()}
-      title={title}
-      footer={
-        <>
-          <Button onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            disabled={busy || !!blocker}
-            title={blocker ?? undefined}
-            onClick={() => void submit()}
-          >
-            {submitLabel}
-          </Button>
-        </>
-      }
-    >
-      <form
-        className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        {children}
-        {/* Lets Enter submit from any field. */}
-        <button type="submit" hidden />
-      </form>
-    </Dialog>
-  );
 }
 
 function CreateBranch({
@@ -382,6 +329,7 @@ function CloneDialog({ onClose }: { onClose: () => void }) {
       }}
       onClose={onClose}
     >
+      <RepoPicker url={url.trim()} onPick={setUrl} />
       <Field label="URL">
         <TextInput
           value={url}

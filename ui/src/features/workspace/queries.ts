@@ -30,6 +30,8 @@ export const keys = {
   /** Locks on the LFS server; refreshed only on demand. */
   lfsLocks: (repo: string) => [repo, "lfsLocks"] as const,
   bisect: (repo: string) => [repo, "bisect"] as const,
+  /** Remotes on the accounts' hosting services; they change with the remotes. */
+  hostingLinks: (repo: string) => [repo, "hostingLinks"] as const,
   /** Prefix for blame and file history, which depend on HEAD and the working tree. */
   history: (repo: string) => [repo, "history"] as const,
 };
@@ -46,6 +48,7 @@ const LIVE = new Set([
   "worktrees",
   "flow",
   "bisect",
+  "hostingLinks",
   ...WORKTREE,
 ]);
 

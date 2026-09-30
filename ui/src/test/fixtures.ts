@@ -48,6 +48,7 @@ export const config: Config = {
     workspaces: [],
     sync: null,
     terminalShell: "",
+    accounts: [],
   },
 };
 

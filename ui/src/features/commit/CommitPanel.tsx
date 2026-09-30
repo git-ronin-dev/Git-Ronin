@@ -5,6 +5,7 @@ import { copyText } from "../../lib/clipboard";
 import { formatDate, relativeTime } from "../../lib/time";
 import { Avatar } from "../../ui/Avatar";
 import { revealCommit } from "../graph/reveal";
+import { CommitChecks } from "../hosting/CommitChecks";
 import { useUiPrefs } from "../workspace/queries";
 import { updateView, useRepoView } from "../workspace/view";
 import { FileList, Stats } from "./FileList";
@@ -51,6 +52,7 @@ export function CommitPanel({ repo }: { repo: string }) {
               <Copy className="size-3.5" />
             </button>
           </div>
+          <CommitChecks repo={repo} oid={d.oid} />
           {d.parents.length > 0 && (
             <div className="flex items-center gap-2 text-xs text-fg-muted">
               <span className="w-16 shrink-0">{d.parents.length > 1 ? "Parents" : "Parent"}</span>

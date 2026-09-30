@@ -17,7 +17,10 @@ export type DialogRequest =
   | { kind: "lfsTrack"; repo: string; pattern: string }
   | { kind: "flowInit"; repo: string }
   | { kind: "flowStart"; repo: string; flow: FlowKind }
-  | { kind: "flowFinish"; repo: string; flow: FlowKind; branch: string };
+  | { kind: "flowFinish"; repo: string; flow: FlowKind; branch: string }
+  /** `branch`: the local branch to propose, if any. */
+  | { kind: "createPullRequest"; repo: string; branch: string | null }
+  | { kind: "createIssue"; repo: string };
 
 interface DialogState {
   request: DialogRequest | null;

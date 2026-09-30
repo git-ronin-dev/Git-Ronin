@@ -12,12 +12,23 @@ export const WORKING_COPY = "working-copy";
 
 /** A file whose diff (or conflict, blame, history) replaces the graph. */
 export type OpenFile =
-  | { kind: "commit"; oid: string; file: FileChange }
+  /** `base` diffs against another commit than the first parent (a pull request's merge base). */
+  | { kind: "commit"; oid: string; file: FileChange; base?: string }
   | { kind: "working"; path: string; staged: boolean }
   | { kind: "conflict"; path: string }
   /** `rev` null blames the working tree. */
   | { kind: "blame"; path: string; rev: string | null }
   | { kind: "history"; path: string };
+
+/** A pull request on the service a remote is on. */
+export interface PrRef {
+  account: string;
+  /** The repository on the service. */
+  path: string;
+  /** The local remote pointing at it. */
+  remote: string;
+  number: number;
+}
 
 /** What the user is looking at in one repository tab. */
 export interface RepoView {
@@ -29,6 +40,8 @@ export interface RepoView {
   rebase: { base: string | null } | null;
   /** The terminal panel is open. */
   terminal: boolean;
+  /** A pull request open over the graph. */
+  pullRequest: PrRef | null;
 }
 
 const empty: RepoView = {
@@ -37,6 +50,7 @@ const empty: RepoView = {
   search: null,
   rebase: null,
   terminal: false,
+  pullRequest: null,
 };
 
 interface ViewState {

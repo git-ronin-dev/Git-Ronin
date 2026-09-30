@@ -8,6 +8,7 @@ import {
   PanelLeft,
   PanelRight,
   Redo2,
+  Rocket,
   Search,
   Settings,
   SquareTerminal,
@@ -86,6 +87,12 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
         ) : (
           <ToolButton icon={SquareTerminal} label="Toggle terminal" disabled />
         )}
+        <ToolButton
+          icon={Rocket}
+          label="Launchpad"
+          shortcut={useShortcutLabel("hosting.launchpad")}
+          onClick={() => useOverlays.setState({ launchpad: true })}
+        />
         <ToolButton
           icon={Settings}
           label="Settings"

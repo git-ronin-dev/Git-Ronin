@@ -1,14 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, KeyRound } from "lucide-react";
+import { Copy, KeyRound, Upload } from "lucide-react";
 import { useState } from "react";
 
 import type { SshKey } from "../../bindings/SshKey";
 import { copyText } from "../../lib/clipboard";
 import { ipc } from "../../lib/ipc";
 import { Button } from "../../ui/Button";
+import { DropdownMenu } from "../../ui/DropdownMenu";
 import { Field, TextInput } from "../../ui/Field";
 import { toast } from "../../ui/toast-store";
 import { activeProfileId } from "../commands/commands";
+import { PROVIDERS } from "../hosting/providers";
+import { useProfileAccounts } from "../hosting/queries";
 import { useConfig } from "../workspace/queries";
 import { settingsKeys, useGitIdentity, useSetProfiles, useSshKeys } from "./queries";
 import { SettingsGroup, SettingsPage } from "./SettingsPage";
@@ -18,7 +21,7 @@ export function SshSettings() {
   return (
     <SettingsPage
       title="SSH keys"
-      description="Keys in your ~/.ssh folder. Add a public key to your account on GitHub, GitLab or another host to push and pull over SSH."
+      description="Keys in your ~/.ssh folder. Add a public key to your account on GitHub, GitLab or another host to push and pull over SSH; with an account signed in, Git Ronin can add it for you."
     >
       {keys.isError && <p className="text-danger">{String(keys.error)}</p>}
       {keys.data?.length === 0 && <p className="text-fg-faint">No SSH keys yet.</p>}
@@ -61,6 +64,7 @@ function KeyRow({ sshKey }: { sshKey: SshKey }) {
           <Copy className="size-3.5" />
           Copy public key
         </Button>
+        <UploadKey sshKey={sshKey} />
         {active && sshKey.hasPrivate && !inUse && (
           <Button
             variant="ghost"
@@ -75,6 +79,34 @@ function KeyRow({ sshKey }: { sshKey: SshKey }) {
         )}
       </div>
     </li>
+  );
+}
+
+/** Adds the public key to one of the profile's accounts. */
+function UploadKey({ sshKey }: { sshKey: SshKey }) {
+  const accounts = useProfileAccounts().filter((a) => a.capabilities.sshKeys && a.signedIn);
+  if (accounts.length === 0) return null;
+  const upload = async (id: string, label: string) => {
+    try {
+      await ipc.hostingAddSshKey(id, sshKey.comment || sshKey.name, sshKey.publicKey);
+      toast.success(`Added ${sshKey.name} to ${label}`);
+    } catch (err) {
+      toast.error(`Could not add the key to ${label}`, String(err));
+    }
+  };
+  return (
+    <DropdownMenu
+      align="end"
+      items={accounts.map(({ account }) => {
+        const label = `${account.username} on ${PROVIDERS[account.kind].label}`;
+        return { label, onSelect: () => void upload(account.id, label) };
+      })}
+    >
+      <Button variant="ghost">
+        <Upload className="size-3.5" />
+        Add to account…
+      </Button>
+    </DropdownMenu>
   );
 }
 

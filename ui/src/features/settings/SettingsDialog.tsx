@@ -2,6 +2,7 @@ import { clsx } from "clsx";
 
 import { useOverlays, type SettingsSection } from "../../app/overlays";
 import { Dialog } from "../../ui/Dialog";
+import { AccountsSettings } from "../hosting/AccountsSettings";
 import { KeyboardSettings } from "./KeyboardSettings";
 import { DiffSettings, GeneralSettings, GitSettings } from "./PreferenceSettings";
 import { ProfilesSettings } from "./ProfilesSettings";
@@ -13,6 +14,7 @@ const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "diffs", label: "Diffs" },
   { id: "git", label: "Git" },
   { id: "profiles", label: "Profiles" },
+  { id: "accounts", label: "Accounts" },
   { id: "keyboard", label: "Keyboard" },
   { id: "ssh", label: "SSH keys" },
   { id: "sync", label: "Sync & backup" },
@@ -51,6 +53,7 @@ export function SettingsDialog() {
           {section === "diffs" && <DiffSettings />}
           {section === "git" && <GitSettings />}
           {section === "profiles" && <ProfilesSettings />}
+          {section === "accounts" && <AccountsSettings />}
           {section === "keyboard" && <KeyboardSettings />}
           {section === "ssh" && <SshSettings />}
           {section === "sync" && <SyncSettings />}

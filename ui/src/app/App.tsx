@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { CommandPalette } from "../features/commands/CommandPalette";
+import { LaunchpadDialog } from "../features/hosting/LaunchpadDialog";
 import { useShortcuts } from "../features/commands/useShortcuts";
 import { CredentialDialog } from "../features/ops/CredentialDialog";
 import { Dialogs } from "../features/ops/Dialogs";
@@ -84,6 +85,7 @@ export function App() {
       <SettingsDialog />
       <ImportDialog />
       <WorkspacesDialog />
+      <LaunchpadDialog />
       <GlobalStashDialog />
       <Toaster />
     </TooltipProvider>

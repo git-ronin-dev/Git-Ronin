@@ -20,6 +20,9 @@ import { Section } from "../../ui/Section";
 import { toast } from "../../ui/toast-store";
 import { Tooltip } from "../../ui/Tooltip";
 import { revealCommit } from "../graph/reveal";
+import { useFork } from "../hosting/fork";
+import { HostingSections } from "../hosting/HostingSections";
+import { useRepoLinks } from "../hosting/queries";
 import { useGitActions } from "../ops/actions";
 import { openDialog } from "../ops/dialogs";
 import { beginDrag, dropProps, useDrag, type DragRef } from "../ops/drag";
@@ -56,6 +59,8 @@ export function Sidebar({ repo }: { repo: string }) {
   const stashActions = useStashActions(repo);
   const actions = useGitActions(repo);
   const ctx = useRepoContext(repo);
+  const links = useRepoLinks(repo).data ?? [];
+  const fork = useFork(repo, ctx.remoteNames);
 
   if (refs.isError) return <p className="p-3 text-danger">{String(refs.error)}</p>;
   if (!refs.data) return null;
@@ -150,13 +155,25 @@ export function Sidebar({ repo }: { repo: string }) {
                 depth={1}
                 icon={<Cloud className={icon} />}
                 title={remote.url ?? undefined}
-                menu={remoteMenu(actions, ctx, remote)}
+                menu={[
+                  ...remoteMenu(actions, ctx, remote),
+                  ...links
+                    .filter((l) => l.remote === remote.name && l.capabilities.fork)
+                    .flatMap((l) => [
+                      "separator" as const,
+                      {
+                        label: `Fork ${l.path} to your account`,
+                        onSelect: () => void fork(l, remote.url),
+                      },
+                    ]),
+                ]}
               >
                 <RefTree repo={repo} items={items} filter={graphFilter} depth={2} />
               </Folder>
             );
           })}
         </Section>
+        <HostingSections repo={repo} />
         <Section
           title="Tags"
           icon={<Tag className={icon} />}

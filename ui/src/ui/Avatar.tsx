@@ -7,22 +7,25 @@ interface AvatarProps {
   name: string;
   email: string;
   size: number;
-  /** Fetch from Gravatar; otherwise always show initials. */
+  /** Fetch from Gravatar (or `url`); otherwise always show initials. */
   remote: boolean;
+  /** A picture the hosting service gave, instead of Gravatar's. */
+  url?: string | null;
 }
 
-export function Avatar({ name, email, size, remote }: AvatarProps) {
-  const [url, setUrl] = useState<string | null>(null);
+export function Avatar({ name, email, size, remote, url: given }: AvatarProps) {
+  const [gravatar, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const url = given ?? gravatar;
 
   useEffect(() => {
-    if (!remote) return;
+    if (!remote || given) return;
     let live = true;
     void gravatarUrl(email, size).then((u) => live && setUrl(u));
     return () => {
       live = false;
     };
-  }, [email, size, remote]);
+  }, [email, size, remote, given]);
 
   const style = { width: size, height: size };
   if (remote && url && !failed) {
