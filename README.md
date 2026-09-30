@@ -11,10 +11,11 @@ turns into a very polished paywall.
 
 But AI made software made-to-measure: when nothing on the shelf fits, you have
 the exact tool you need built. So Opus Chad 5.5 built this fantastic Git client.
+Now i hope it fits someone else, too.
 
 > [!WARNING]
-> Git Ronin was written by Claude Opus and is still being tested. It seems to
-> work, but keep a remote or backup of anything you care about, and please
+> Git Ronin was written by Claude Opus and is still being tested.
+> It seems to work, but keep a remote or backup of anything you care about, and please
 > report what breaks.
 
 Built with Tauri 2 (Rust) and React + TypeScript. Reads use
@@ -61,7 +62,7 @@ window if there is one.
 - **App:** command palette, rebindable shortcuts, profiles, SSH key
   management, terminal panel, settings export and sync through a git repo
 - **Hosting:** GitHub, GitLab, Bitbucket (Cloud and Data Center), Azure DevOps
-  and Jira, via token or, for GitHub, browser sign-in; secrets live
+  and Jira, via token or, for GitLab, browser sign-in; secrets live
   in the system keyring. Pull requests (view, comment, approve, merge, check
   out, create), issues, CI checks, a launchpad, clone and fork from accounts,
   HTTPS push without password prompts
