@@ -21,7 +21,7 @@ export function brushEnsoPath(cx: number, cy: number, r: number, width: number, 
   // Pressure along the stroke (0..1): full at the start, a second swell a
   // third of the way round, then lifting off into a dry tail.
   const widthAt = (t: number) =>
-    (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 1.6 + 0.35)) ** 0.8) * (1 - 0.8 * t ** 3);
+    (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 1.6 + 0.35)) ** 0.8) * (1 - 0.55 * t ** 3);
   const start = -40 + gap / 2;
   const sweep = 360 - gap;
   const outer: string[] = [];

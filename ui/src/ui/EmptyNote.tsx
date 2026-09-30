@@ -36,7 +36,7 @@ export function EmptyNote({
 }) {
   return (
     <div className={clsx("flex flex-col items-center gap-2 px-6 py-8 text-center", className)}>
-      <BrushEnso className="mb-1 size-12 text-fg-faint opacity-60" />
+      <BrushEnso className="mb-1 size-16 text-fg-faint opacity-50" />
       <p className="font-medium text-fg-muted">{title}</p>
       {children && <div className="max-w-72 text-xs text-fg-faint">{children}</div>}
     </div>
