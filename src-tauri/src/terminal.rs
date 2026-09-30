@@ -175,9 +175,6 @@ fn take_utf8(bytes: &mut Vec<u8>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
-    use std::time::Duration;
-
     use super::*;
 
     #[test]
@@ -195,6 +192,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn runs_a_shell_and_reports_its_exit() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
         let terminals = Terminals::default();
         let (tx, rx) = mpsc::channel();
         let tmp = tempfile::tempdir().unwrap();
