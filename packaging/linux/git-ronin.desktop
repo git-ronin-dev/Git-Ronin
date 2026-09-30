@@ -5,7 +5,7 @@ GenericName=Git Client
 {{#if comment}}
 Comment={{comment}}
 {{/if}}
-Exec={{exec}}
+Exec={{exec}} %F
 Icon={{icon}}
 Terminal=false
 Categories=Development;RevisionControl;

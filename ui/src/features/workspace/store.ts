@@ -17,6 +17,8 @@ interface WorkspaceState {
   /** Reopens the tabs of the previous session. */
   restore: () => Promise<void>;
   open: (path: string) => Promise<void>;
+  /** Opens repositories named on the command line, one after the other. */
+  openAll: (paths: string[]) => Promise<void>;
   /** Shows a folder picker, then opens the chosen repository. */
   pickAndOpen: () => Promise<void>;
   /** Shows a folder picker, then creates a repository there and opens it. */
@@ -48,6 +50,11 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
     } catch (err) {
       reportError("Could not restore open repositories")(err);
     }
+    await get().openAll(await ipc.takeLaunchPaths().catch(() => []));
+  },
+
+  openAll: async (paths) => {
+    for (const path of paths) await get().open(path);
   },
 
   open: async (path) => {

@@ -25,6 +25,7 @@ import { WorkspacesDialog } from "../features/workspaces/WorkspacesDialog";
 import {
   ipc,
   onConfigChanged,
+  onOpenPaths,
   onProgress,
   onRepoChanged,
   onSyncChanged,
@@ -75,6 +76,7 @@ export function App() {
         showWarnings();
       }),
       onSyncChanged(() => void client.invalidateQueries({ queryKey: syncKeys.status })),
+      onOpenPaths((paths) => void useWorkspace.getState().openAll(paths)),
     ];
     return () => unlisten.forEach((u) => void u.then((stop) => stop()));
   }, [client]);

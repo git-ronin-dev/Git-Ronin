@@ -12,6 +12,7 @@ vi.mock("../../lib/ipc", () => ({
     setActiveTab: vi.fn(),
     restoreTabs: vi.fn(),
     configGet: vi.fn(),
+    takeLaunchPaths: vi.fn(),
   },
 }));
 
@@ -22,6 +23,7 @@ describe("useWorkspace", () => {
   beforeEach(() => {
     vi.mocked(ipc.closeRepo).mockResolvedValue();
     vi.mocked(ipc.setActiveTab).mockResolvedValue();
+    vi.mocked(ipc.takeLaunchPaths).mockResolvedValue([]);
     useWorkspace.setState({ tabs: [], active: null, opening: false });
     useToasts.setState({ items: [] });
   });
@@ -65,5 +67,16 @@ describe("useWorkspace", () => {
     await useWorkspace.getState().restore();
     expect(useWorkspace.getState().tabs.map((t) => t.name)).toEqual(["ronin", "other"]);
     expect(useWorkspace.getState().active).toBe("/work/other");
+  });
+
+  it("opens the paths the app was started with after restoring", async () => {
+    vi.mocked(ipc.restoreTabs).mockResolvedValue([repoInfo]);
+    vi.mocked(ipc.configGet).mockResolvedValue(config);
+    vi.mocked(ipc.takeLaunchPaths).mockResolvedValue(["/work/third/src"]);
+    vi.mocked(ipc.openRepo).mockResolvedValue(third);
+    await useWorkspace.getState().restore();
+    expect(ipc.openRepo).toHaveBeenCalledWith("/work/third/src");
+    expect(useWorkspace.getState().tabs.map((t) => t.name)).toEqual(["ronin", "third"]);
+    expect(useWorkspace.getState().active).toBe("/work/third");
   });
 });

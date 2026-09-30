@@ -71,6 +71,8 @@ import type { Worktree } from "../bindings/Worktree";
 /** Typed wrappers for the Rust commands in src-tauri/src/commands.rs. */
 export const ipc = {
   gitVersion: () => invoke<GitVersion>("git_version"),
+  /** Paths this start of the app was given; empty after the first call. */
+  takeLaunchPaths: () => invoke<string[]>("take_launch_paths"),
 
   /** Only http(s) addresses. */
   openUrl: (url: string) => invoke<void>("open_url", { url }),
@@ -405,6 +407,11 @@ export function onWorktreeChanged(handler: (repo: string) => void): Promise<Unli
 /** Fires when the portable settings changed underneath the UI (a sync). */
 export function onConfigChanged(handler: () => void): Promise<UnlistenFn> {
   return listen("config-changed", () => handler());
+}
+
+/** Repositories named by another start of the app (`git-ronin <path>`). */
+export function onOpenPaths(handler: (paths: string[]) => void): Promise<UnlistenFn> {
+  return listen<string[]>("open-paths", (event) => handler(event.payload));
 }
 
 /** Fires when the settings sync status changed. */

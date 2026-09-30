@@ -5,6 +5,7 @@ mod askpass;
 mod commands;
 mod env;
 mod hosting;
+mod launch;
 mod profile;
 mod secrets;
 mod settings;
@@ -29,9 +30,14 @@ fn main() {
     env::prepare();
 
     tauri::Builder::default()
+        // First, so a second start hands its paths over before doing anything else.
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            launch::second_instance(app, args, cwd);
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(update::PendingUpdate::default())
+        .manage(launch::LaunchPaths::from_args())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             let (config, warnings) = ConfigStore::load(dir);
@@ -55,6 +61,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::git_version,
             env::open_url,
+            launch::take_launch_paths,
             update::app_info,
             update::update_check,
             update::update_install,
@@ -196,9 +203,18 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to start Git Ronin")
-        .run(|app, event| {
-            if let RunEvent::Exit = event {
-                app.state::<AppState>().sync.shutdown(app);
+        .run(|app, event| match event {
+            RunEvent::Exit => app.state::<AppState>().sync.shutdown(app),
+            // Folders dropped on the Dock icon or opened with the app in Finder.
+            #[cfg(target_os = "macos")]
+            RunEvent::Opened { urls } => {
+                let paths = urls
+                    .iter()
+                    .filter_map(|u| u.to_file_path().ok())
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
+                launch::open(app, paths);
             }
+            _ => {}
         });
 }
