@@ -12,6 +12,7 @@
 /* Only token colours exist; Tailwind's default palette is switched off. */
 @theme inline {
   --color-*: initial;
+  --color-base: var(--rn-base);
   --color-canvas: var(--rn-canvas);
   --color-surface: var(--rn-surface);
   --color-raised: var(--rn-raised);
@@ -32,6 +33,7 @@
   --radius-sm: var(--rn-radius-sm);
   --radius-md: var(--rn-radius-md);
   --radius-lg: var(--rn-radius-lg);
+  --radius-panel: var(--rn-radius-panel);
 
   --font-sans: var(--rn-font-sans);
   --font-mono: var(--rn-font-mono);
@@ -102,7 +104,7 @@
 
   body {
     margin: 0;
-    background: var(--rn-canvas);
+    background: var(--rn-base);
     color: var(--rn-fg);
     font-family: var(--rn-font-sans);
     font-size: 13px;
@@ -136,26 +138,6 @@
 }
 
 @layer components {
-  /* A katana edge: a hairline with a glint of polished steel along it. */
-  .rn-edge-x {
-    background: linear-gradient(
-      90deg,
-      var(--rn-line) 0%,
-      var(--rn-edge) 18%,
-      var(--rn-line) 55%,
-      var(--rn-line) 100%
-    );
-  }
-  .rn-edge-y {
-    background: linear-gradient(
-      180deg,
-      var(--rn-line) 0%,
-      var(--rn-edge) 30%,
-      var(--rn-line) 70%,
-      var(--rn-line) 100%
-    );
-  }
-
   /* Markdown from hosting services (react-markdown output). */
   .rn-markdown {
     overflow-wrap: anywhere;

@@ -24,6 +24,12 @@ import { RepoTabs } from "./RepoTabs";
 import { StatusBar } from "./StatusBar";
 import { Toolbar } from "./Toolbar";
 
+/**
+ * A floating panel: rounded, outlined, on the base colour. Inside the
+ * Panel, whose own box clips it away when collapsed.
+ */
+const card = "h-full overflow-hidden rounded-panel border border-line";
+
 function toggle(panel: PanelImperativeHandle | null) {
   if (!panel) return;
   if (panel.isCollapsed()) panel.expand();
@@ -43,7 +49,7 @@ export function AppShell() {
   }, [sidebar, details]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-base">
       <RepoTabs />
       <Toolbar
         hasRepo={active !== null}
@@ -51,7 +57,7 @@ export function AppShell() {
         onToggleDetails={() => toggle(details.current)}
         onSearch={() => active && updateView(active, { search: { query: "", byPath: false } })}
       />
-      <Group id="main-layout" className="min-h-0 flex-1">
+      <Group id="main-layout" className="min-h-0 flex-1 px-1.5">
         <Panel
           id="sidebar"
           panelRef={sidebar}
@@ -60,14 +66,19 @@ export function AppShell() {
           maxSize={420}
           collapsible
           collapsedSize={0}
-          className="bg-surface"
         >
-          {active && <Sidebar key={active} repo={active} />}
+          <div className={clsx(card, "bg-surface")}>
+            {active && <Sidebar key={active} repo={active} />}
+          </div>
         </Panel>
         <ResizeHandle />
         <Panel id="graph" minSize={320}>
           <main className="h-full">
-            {tabs.length === 0 && <EmptyState />}
+            {tabs.length === 0 && (
+              <div className={clsx(card, "bg-canvas")}>
+                <EmptyState />
+              </div>
+            )}
             {/* Every tab stays mounted so switching keeps scroll positions. */}
             {tabs.map((tab) => (
               <div key={tab.path} className={clsx("h-full", tab.path !== active && "hidden")}>
@@ -85,9 +96,8 @@ export function AppShell() {
           maxSize={600}
           collapsible
           collapsedSize={0}
-          className="bg-surface"
         >
-          <aside aria-label="Details" className="h-full">
+          <aside aria-label="Details" className={clsx(card, "bg-surface")}>
             {active && <Details repo={active} />}
           </aside>
         </Panel>
@@ -113,7 +123,7 @@ function RepoMain({ repo }: { repo: string }) {
   }, [terminal, started, panel]);
 
   const main = (
-    <div className="flex h-full flex-col">
+    <div className={clsx(card, "flex flex-col bg-canvas")}>
       <OperationBanner repo={repo} />
       <div className="min-h-0 flex-1">
         <div className={clsx("h-full", (openFile || rebase || pullRequest) && "hidden")}>
@@ -156,7 +166,9 @@ function RepoMain({ repo }: { repo: string }) {
           if (size.inPixels === 0 && terminal) updateView(repo, { terminal: false });
         }}
       >
-        <TerminalPanel repo={repo} visible={terminal} />
+        <div className={card}>
+          <TerminalPanel repo={repo} visible={terminal} />
+        </div>
       </Panel>
     </Group>
   );

@@ -13,7 +13,7 @@ export function StatusBar() {
   const git = useQuery({ queryKey: ["gitVersion"], queryFn: ipc.gitVersion });
 
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-line bg-surface px-3 text-xs text-fg-muted">
+    <footer className="flex h-6 shrink-0 items-center gap-4 bg-base px-3 text-xs text-fg-muted">
       {active && <RepoStatus repo={active} />}
       {active && <TaskStatus repo={active} />}
       <span className="ml-auto" />

@@ -46,7 +46,7 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
 
   return (
     // Three columns keep the action group centred.
-    <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-surface px-2">
+    <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-base px-2">
       <div className="flex items-center gap-1">
         <ToolButton
           icon={PanelLeft}

@@ -47,7 +47,7 @@ function over(fg: string, alpha: number, bg: string) {
 }
 
 const TEXT = ["fg", "fg-muted", "fg-faint", "accent", "gold", "danger", "success", "warning"];
-const BACKGROUNDS = ["canvas", "surface", "raised"];
+const BACKGROUNDS = ["base", "canvas", "surface", "raised"];
 const SYNTAX = [
   "keyword",
   "string",

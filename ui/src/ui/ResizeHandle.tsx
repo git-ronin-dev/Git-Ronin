@@ -2,17 +2,19 @@ import { clsx } from "clsx";
 import { Separator } from "react-resizable-panels";
 
 /**
- * Hairline splitter with a wider invisible grab area, drawn as a katana edge
- * (a glint along the line). `horizontal` splits a column.
+ * The gap between two floating panels, which drags to resize them. A thin
+ * vermilion line shows in it while hovered or dragged. `horizontal` splits
+ * a column.
  */
 export function ResizeHandle({ horizontal = false }: { horizontal?: boolean }) {
   return (
     <Separator
       className={clsx(
-        "relative after:absolute hover:bg-accent hover:bg-none data-[separator=active]:bg-accent data-[separator=active]:bg-none",
+        "group relative shrink-0 outline-none after:absolute after:rounded-full after:transition-colors",
+        "hover:after:bg-accent data-[separator=active]:after:bg-accent",
         horizontal
-          ? "rn-edge-x h-px after:inset-x-0 after:-top-1 after:h-2"
-          : "rn-edge-y w-px after:inset-y-0 after:-left-1 after:w-2",
+          ? "h-1.5 after:inset-x-2 after:top-1/2 after:h-0.5 after:-translate-y-1/2"
+          : "w-1.5 after:inset-y-2 after:left-1/2 after:w-0.5 after:-translate-x-1/2",
       )}
     />
   );

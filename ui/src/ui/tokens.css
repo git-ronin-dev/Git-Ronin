@@ -9,6 +9,8 @@
 :root {
   color-scheme: dark;
 
+  /* Behind the panels: tab bar, toolbar, status bar and the gaps. */
+  --rn-base: #0d0c0e;
   --rn-canvas: #131214;
   --rn-surface: #1a191b;
   --rn-raised: #242225;
@@ -23,9 +25,6 @@
   --rn-danger: #f25f78;
   --rn-success: #8fbf6f;
   --rn-warning: #dcaa48;
-
-  /* The glint along a divider's edge (see `.rn-edge`). */
-  --rn-edge: #6b6158;
 
   /* Commit graph lanes, cycled by lane index. */
   --rn-lane-0: #f26d45;
@@ -51,6 +50,8 @@
   --rn-radius-sm: 4px;
   --rn-radius-md: 6px;
   --rn-radius-lg: 10px;
+  /* The floating panels (sidebar, graph, details, terminal). */
+  --rn-radius-panel: 8px;
 
   --rn-font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --rn-font-mono:
@@ -62,10 +63,11 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
+  --rn-base: #e8e1d3;
   --rn-canvas: #f2ede3;
   --rn-surface: #faf7f0;
   --rn-raised: #ebe5d8;
-  --rn-hover: #e2dbcc;
+  --rn-hover: #ddd5c5;
   --rn-line: #d6cdbb;
   --rn-fg: #1f1b17;
   --rn-fg-muted: #574f45;
@@ -76,8 +78,6 @@
   --rn-danger: #b3203f;
   --rn-success: #346a2f;
   --rn-warning: #7d5606;
-
-  --rn-edge: #b3a68f;
 
   --rn-lane-0: #c2421e;
   --rn-lane-1: #9a7419;

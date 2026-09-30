@@ -1,6 +1,7 @@
 import { clsx } from "clsx";
 import { forwardRef, type ComponentProps } from "react";
 
+import logo from "../assets/logo.png";
 import { activeProfileId } from "../features/commands/commands";
 import { openDialog } from "../features/ops/dialogs";
 import { useConfig } from "../features/workspace/queries";
@@ -15,8 +16,9 @@ export function RepoTabs() {
     <div
       role="tablist"
       aria-label="Open repositories"
-      className="flex h-9 shrink-0 items-end gap-0.5 overflow-x-auto bg-canvas px-2 pt-1"
+      className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto bg-base px-2"
     >
+      <img src={logo} alt="" width={20} height={20} className="mx-1 shrink-0" />
       {tabs.map((tab) => (
         <div
           key={tab.path}
@@ -27,9 +29,9 @@ export function RepoTabs() {
           // Middle click closes, as in browsers.
           onAuxClick={(e) => e.button === 1 && void close(tab.path)}
           className={clsx(
-            "group flex h-8 max-w-56 min-w-28 cursor-default items-center gap-2 rounded-t-md border border-b-0 px-3",
+            "group flex h-7 max-w-56 min-w-28 cursor-default items-center gap-2 rounded-md border px-3",
             tab.path === active
-              ? "border-line bg-surface text-fg"
+              ? "border-line bg-surface text-fg shadow-[inset_0_-2px_0_var(--rn-accent)]"
               : "border-transparent text-fg-muted hover:bg-hover hover:text-fg",
           )}
         >
@@ -62,7 +64,7 @@ export function RepoTabs() {
         <button
           type="button"
           aria-label="Open, clone or create a repository"
-          className="mb-1 flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
         >
           <Plus className="size-4" />
         </button>
@@ -106,7 +108,7 @@ const ProfileButton = forwardRef<HTMLButtonElement, ComponentProps<"button"> & {
         type="button"
         aria-label={`Profile: ${name}`}
         {...props}
-        className="mb-1 ml-auto flex h-7 max-w-40 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-fg-muted hover:bg-hover hover:text-fg"
+        className="ml-auto flex h-7 max-w-40 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-fg-muted hover:bg-hover hover:text-fg"
       >
         <UserRound className="size-3.5 shrink-0" />
         <span className="truncate">{name}</span>
