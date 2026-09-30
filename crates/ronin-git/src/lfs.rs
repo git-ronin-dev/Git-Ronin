@@ -177,9 +177,15 @@ fn parse_track(output: &str) -> Vec<LfsPattern> {
             }
             let line = line.trim();
             let (pattern, source) = line.strip_suffix(')')?.rsplit_once(" (")?;
+            // Patterns use `/`, but on Windows the source uses `\`.
+            let source = if cfg!(windows) {
+                source.replace('\\', "/")
+            } else {
+                source.to_owned()
+            };
             tracked.then(|| LfsPattern {
                 pattern: pattern.to_owned(),
-                source: source.to_owned(),
+                source,
             })
         })
         .collect()
