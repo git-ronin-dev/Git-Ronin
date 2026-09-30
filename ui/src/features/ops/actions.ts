@@ -9,16 +9,37 @@ import type { PullMode } from "../../bindings/PullMode";
 import type { PushTarget } from "../../bindings/PushTarget";
 import type { RebaseStep } from "../../bindings/RebaseStep";
 import type { Refs } from "../../bindings/Refs";
+import type { RepoLink } from "../../bindings/RepoLink";
 import type { ResetMode } from "../../bindings/ResetMode";
 import { ipc } from "../../lib/ipc";
 import { confirm } from "../../ui/confirm-store";
-import { toast } from "../../ui/toast-store";
+import { toast, type ToastAction } from "../../ui/toast-store";
 import { invalidateRepo, keys } from "../workspace/queries";
 import { WORKING_COPY, updateView } from "../workspace/view";
 import { openDialog } from "./dialogs";
 import { startTask } from "./tasks";
 
 export type GitActions = ReturnType<typeof gitActions>;
+
+/** Branches that pull requests usually go into, not come from. */
+const TRUNKS = new Set(["main", "master", "trunk", "develop"]);
+
+/** After pushing a topic branch to a hosted repository: open a pull request for it. */
+function pullRequestOffer(
+  client: QueryClient,
+  repo: string,
+  branch: string,
+): ToastAction | undefined {
+  const links = client
+    .getQueriesData<RepoLink[]>({ queryKey: keys.hostingLinks(repo) })
+    .map(([, data]) => data)
+    .find(Boolean);
+  if (TRUNKS.has(branch) || !links?.some((l) => l.capabilities.pullRequests)) return undefined;
+  return {
+    label: "Create pull request…",
+    run: () => openDialog({ kind: "createPullRequest", repo, branch }),
+  };
+}
 
 export function useGitActions(repo: string): GitActions {
   const client = useQueryClient();
@@ -97,7 +118,7 @@ export function gitActions(client: QueryClient, repo: string) {
     );
     if (!result.ok) return false;
     if (result.value === "pushed") {
-      toast.success(`Pushed ${name}`);
+      toast.success(`Pushed ${name}`, undefined, pullRequestOffer(client, repo, name));
       return true;
     }
     // The force push may only replace what the user is shown here.

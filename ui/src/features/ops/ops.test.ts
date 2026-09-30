@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { RepoLink } from "../../bindings/RepoLink";
 import { ipc } from "../../lib/ipc";
 import { refs, repoInfo } from "../../test/fixtures";
 import type { MenuItem } from "../../ui/ContextMenu";
@@ -239,6 +240,34 @@ describe("gitActions", () => {
     expect(ipc.pushBranch).toHaveBeenNthCalledWith(1, "/work/ronin", "main", null, null);
     // origin/main's commit in the fixture.
     expect(ipc.pushBranch).toHaveBeenNthCalledWith(2, "/work/ronin", "main", null, "a".repeat(40));
+  });
+
+  it("offers a pull request after pushing a topic branch to a hosted repository", async () => {
+    const caps = { pullRequests: true } as RepoLink["capabilities"];
+    const link = {
+      account: "a",
+      kind: "github",
+      remote: "origin",
+      path: "o/r",
+      capabilities: caps,
+    };
+    client.setQueryData([...keys.hostingLinks("/work/ronin"), "a"], [link]);
+    vi.mocked(ipc.pushBranch).mockResolvedValue("pushed");
+
+    await actions.push("topic", "origin/topic");
+    const [pushed] = useToasts.getState().items;
+    expect(pushed).toMatchObject({ kind: "success", title: "Pushed topic" });
+    pushed!.action!.run();
+    expect(useDialogs.getState().request).toEqual({
+      kind: "createPullRequest",
+      repo: "/work/ronin",
+      branch: "topic",
+    });
+
+    useToasts.setState({ items: [] });
+    await actions.push("main", "origin/main");
+    expect(useToasts.getState().items[0]!.action).toBeUndefined();
+    client.removeQueries({ queryKey: keys.hostingLinks("/work/ronin") });
   });
 
   it("asks where to push a branch without an upstream", async () => {

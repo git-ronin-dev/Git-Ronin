@@ -22,6 +22,7 @@ import { startTask, useTask } from "../ops/tasks";
 import { useRefs, useUiPrefs } from "../workspace/queries";
 import { updateView, useRepoView, type PrRef } from "../workspace/view";
 import { Checks } from "./Checks";
+import { Markdown } from "./Markdown";
 import { prNoun, prRef } from "./providers";
 import { hostingKeys, useAccounts, useCiStatus, usePullRequest, useRepoLinks } from "./queries";
 
@@ -316,7 +317,7 @@ function Conversation({
     <div className="mx-auto max-w-3xl space-y-5 p-4">
       <section className="rounded-md border border-line p-3 select-text">
         {detail.body.trim() ? (
-          <p className="break-words whitespace-pre-wrap">{detail.body}</p>
+          <Markdown text={detail.body} base={detail.pr.webUrl} />
         ) : (
           <p className="text-fg-faint italic">No description.</p>
         )}
@@ -378,7 +379,9 @@ function Conversation({
                 {relativeTime(Number(c.created))}
               </span>
             </header>
-            <p className="p-3 break-words whitespace-pre-wrap select-text">{c.body}</p>
+            <div className="p-3 select-text">
+              <Markdown text={c.body} base={detail.pr.webUrl} />
+            </div>
           </article>
         ))}
         <form
