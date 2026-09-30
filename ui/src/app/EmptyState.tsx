@@ -27,8 +27,8 @@ export function EmptyState() {
         <img
           src={logo}
           alt=""
-          width={112}
-          height={112}
+          width={160}
+          height={160}
           className="animate-rn-rise drop-shadow-[0_6px_24px_rgb(0_0_0/0.35)]"
         />
         <div className="flex items-center gap-3">

@@ -18,7 +18,7 @@ export function RepoTabs() {
       aria-label="Open repositories"
       className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto bg-base px-2"
     >
-      <img src={logo} alt="" width={20} height={20} className="mx-1 shrink-0" />
+      <img src={logo} alt="" width={28} height={28} className="mr-1 shrink-0" />
       {tabs.map((tab) => (
         <div
           key={tab.path}
