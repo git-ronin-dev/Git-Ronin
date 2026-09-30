@@ -3,6 +3,7 @@
 
 mod askpass;
 mod commands;
+mod env;
 mod hosting;
 mod profile;
 mod secrets;
@@ -11,6 +12,7 @@ mod ssh;
 mod state;
 mod sync;
 mod terminal;
+mod update;
 mod watcher;
 
 use ronin_config::ConfigStore;
@@ -24,10 +26,12 @@ fn main() {
     if let Some(code) = askpass::client() {
         std::process::exit(code);
     }
+    env::prepare();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(update::PendingUpdate::default())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             let (config, warnings) = ConfigStore::load(dir);
@@ -50,6 +54,10 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::git_version,
+            env::open_url,
+            update::app_info,
+            update::update_check,
+            update::update_install,
             commands::config_get,
             commands::config_take_warnings,
             settings::config_set_ui,
@@ -57,6 +65,7 @@ fn main() {
             settings::config_set_keybindings,
             settings::config_set_profiles,
             settings::config_set_terminal_shell,
+            settings::config_set_check_updates,
             settings::profile_activate,
             settings::git_identity,
             settings::settings_export,

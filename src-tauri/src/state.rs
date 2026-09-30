@@ -64,7 +64,7 @@ impl AppState {
         askpass: Option<Arc<Askpass>>,
         profile: ProfileGit,
     ) -> Self {
-        let git = GitCli::discover().map(|mut git| {
+        let git = GitCli::discover_with(crate::env::child_env().to_vec()).map(|mut git| {
             for (key, value) in askpass.iter().flat_map(|a| a.env()) {
                 git = git.env(key, value);
             }

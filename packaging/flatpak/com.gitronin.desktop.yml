@@ -1,0 +1,80 @@
+# Flatpak manifest. Repackages the .deb from a release, and builds git (and
+# adds git-lfs) into the app, since the runtime has no git.
+#
+# Local build, from the repository root after `npx tauri build --bundles deb`:
+#   cp target/release/bundle/deb/*.deb packaging/flatpak/git-ronin.deb
+#   flatpak-builder --user --install --force-clean build-flatpak \
+#     packaging/flatpak/com.gitronin.desktop.yml
+#
+# For Flathub, replace the `git-ronin.deb` source with the release's URL and
+# sha256 (the release workflow attaches such a manifest to each release).
+id: com.gitronin.desktop
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+command: git-ronin
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Repositories can be anywhere in the home folder, and git reads
+  # ~/.gitconfig, ~/.config/git and ~/.ssh.
+  - --filesystem=home
+  - --socket=ssh-auth
+  - --socket=gpg-agent
+  # Account tokens live in the Secret Service.
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: git
+    buildsystem: simple
+    build-commands:
+      # NO_RUST: the Rust parts would need cargo, which the SDK lacks.
+      - make -j"$FLATPAK_BUILDER_N_JOBS" prefix=/app NO_TCLTK=1 NO_PERL=1 NO_PYTHON=1
+        NO_RUST=1 NO_GETTEXT=1 INSTALL_SYMLINKS=1 all
+      - make prefix=/app NO_TCLTK=1 NO_PERL=1 NO_PYTHON=1 NO_RUST=1 NO_GETTEXT=1
+        INSTALL_SYMLINKS=1 install
+    cleanup:
+      - /share/gitweb
+      - /share/perl5
+    sources:
+      - type: archive
+        url: https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.56.0.tar.xz
+        sha256: 26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3
+
+  - name: git-lfs
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 git-lfs /app/bin/git-lfs
+    sources:
+      - type: archive
+        only-arches: [x86_64]
+        url: https://github.com/git-lfs/git-lfs/releases/download/v3.8.0/git-lfs-linux-amd64-v3.8.0.tar.gz
+        sha256: e455e00f15d9b95661b8d53498ffb0c3367962cf1ec73c31ab7369516cd6ab8d
+      - type: archive
+        only-arches: [aarch64]
+        url: https://github.com/git-lfs/git-lfs/releases/download/v3.8.0/git-lfs-linux-arm64-v3.8.0.tar.gz
+        sha256: ac9c8efac980bb0505ead384d087e2acb6486fd8498691a2165fa174ec6118c2
+
+  - name: git-ronin
+    buildsystem: simple
+    build-commands:
+      - ar -x git-ronin.deb
+      - tar -xf data.tar.gz
+      - install -Dm755 usr/bin/git-ronin /app/bin/git-ronin
+      - install -Dm644 "usr/share/applications/Git Ronin.desktop"
+        /app/share/applications/com.gitronin.desktop.desktop
+      - desktop-file-edit --set-icon=com.gitronin.desktop
+        /app/share/applications/com.gitronin.desktop.desktop
+      - for size in 32x32 128x128; do install -Dm644 usr/share/icons/hicolor/$size/apps/git-ronin.png
+        /app/share/icons/hicolor/$size/apps/com.gitronin.desktop.png; done
+      - install -Dm644 usr/share/icons/hicolor/256x256@2/apps/git-ronin.png
+        /app/share/icons/hicolor/256x256/apps/com.gitronin.desktop.png
+      - install -Dm644 usr/share/metainfo/com.gitronin.desktop.metainfo.xml
+        /app/share/metainfo/com.gitronin.desktop.metainfo.xml
+      - sed -i 's|<launchable type="desktop-id">.*</launchable>|<launchable type="desktop-id">com.gitronin.desktop.desktop</launchable>|'
+        /app/share/metainfo/com.gitronin.desktop.metainfo.xml
+    sources:
+      - type: file
+        path: git-ronin.deb

@@ -4,9 +4,11 @@ import type { Theme } from "../../bindings/Theme";
 import type { UiPrefs } from "../../bindings/UiPrefs";
 import { Button } from "../../ui/Button";
 import { Checkbox, Field, Select, TextInput } from "../../ui/Field";
+import { checkForUpdates, installUpdate, useUpdates } from "../updates/store";
+import { useAppInfo } from "../updates/useUpdateCheck";
 import { useConfig, useSetUiPrefs, useUiPrefs } from "../workspace/queries";
-import { useSetGitPrefs, useSetTerminalShell } from "./queries";
-import { SettingsPage } from "./SettingsPage";
+import { useSetCheckUpdates, useSetGitPrefs, useSetTerminalShell } from "./queries";
+import { SettingsGroup, SettingsPage } from "./SettingsPage";
 
 function useUi(): [UiPrefs | undefined, (patch: Partial<UiPrefs>) => void] {
   const prefs = useUiPrefs();
@@ -72,7 +74,56 @@ export function GeneralSettings() {
           onCommit={(value) => saveShell.mutate(value.trim())}
         />
       </Field>
+      <UpdateSettings />
     </SettingsPage>
+  );
+}
+
+function UpdateSettings() {
+  const info = useAppInfo().data;
+  const check = useConfig().data?.local.checkUpdates ?? true;
+  const saveCheck = useSetCheckUpdates();
+  const state = useUpdates();
+  if (!info) return null;
+  const busy =
+    state.phase === "checking" || state.phase === "downloading" || state.phase === "installing";
+  return (
+    <SettingsGroup title="Version">
+      <p className="text-fg select-text">
+        Git Ronin {info.version} <span className="text-fg-muted">· {info.install}</span>
+      </p>
+      {info.updatesUnavailable !== null ? (
+        <p className="text-xs text-fg-faint">{info.updatesUnavailable}</p>
+      ) : (
+        <>
+          <Checkbox
+            label="Check for updates automatically"
+            checked={check}
+            onChange={(value) => saveCheck.mutate(value)}
+          />
+          <div className="flex items-center gap-3">
+            {state.phase === "available" ? (
+              <Button variant="primary" onClick={() => void installUpdate()}>
+                Install {state.update.version}
+              </Button>
+            ) : (
+              <Button disabled={busy} onClick={() => void checkForUpdates(false)}>
+                Check now
+              </Button>
+            )}
+            <span role="status" className="text-xs text-fg-muted">
+              {state.phase === "checking" && "Checking…"}
+              {state.phase === "current" &&
+                `Up to date (checked ${new Date(state.checkedAt).toLocaleTimeString()})`}
+              {state.phase === "available" && `Version ${state.update.version} is available.`}
+              {state.phase === "downloading" && "Downloading…"}
+              {state.phase === "installing" && "Installing…"}
+              {state.phase === "failed" && <span className="text-danger">{state.message}</span>}
+            </span>
+          </div>
+        </>
+      )}
+    </SettingsGroup>
   );
 }
 

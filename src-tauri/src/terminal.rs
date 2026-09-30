@@ -62,6 +62,12 @@ impl Terminals {
         };
         let mut cmd = CommandBuilder::new(&shell);
         cmd.cwd(cwd);
+        for (key, value) in crate::env::child_env() {
+            match value {
+                Some(value) => cmd.env(key, value),
+                None => cmd.env_remove(key),
+            }
+        }
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         for (key, value) in env {
@@ -144,9 +150,10 @@ fn default_shell() -> String {
     if cfg!(windows) {
         "powershell.exe".into()
     } else {
+        // Inside a Flatpak the user's shell may not exist.
         std::env::var("SHELL")
             .ok()
-            .filter(|s| !s.is_empty())
+            .filter(|s| !s.is_empty() && std::path::Path::new(s).exists())
             .unwrap_or_else(|| "/bin/sh".into())
     }
 }

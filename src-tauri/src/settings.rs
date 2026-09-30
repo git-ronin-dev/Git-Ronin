@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use ronin_config::bundle::{self, ImportMode};
 use ronin_config::merge::Change;
 use ronin_config::sync::SyncStatus;
-use ronin_config::{GitPrefs, Profile, SyncSettings, UiPrefs, Workspace};
+use ronin_config::{CheckUpdates, GitPrefs, Profile, SyncSettings, UiPrefs, Workspace};
 use ronin_git::{Progress, RepoSummary};
 use serde::Serialize;
 use tauri::AppHandle;
@@ -63,6 +63,16 @@ pub async fn config_set_terminal_shell(app: AppHandle, shell: String) -> CmdResu
     blocking(&app, move |_, s| {
         s.config()
             .update_local(|l| l.terminal_shell = shell)
+            .map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn config_set_check_updates(app: AppHandle, check: bool) -> CmdResult<()> {
+    blocking(&app, move |_, s| {
+        s.config()
+            .update_local(|l| l.check_updates = CheckUpdates(check))
             .map_err(err)
     })
     .await

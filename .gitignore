@@ -4,3 +4,8 @@ node_modules/
 /src-tauri/gen/schemas
 *.log
 .DS_Store
+
+# Flatpak builds
+/packaging/flatpak/git-ronin.deb
+/build-flatpak
+/.flatpak-builder

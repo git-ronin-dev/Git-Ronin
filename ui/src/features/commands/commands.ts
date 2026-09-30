@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { openSettings, useOverlays } from "../../app/overlays";
+import type { AppInfo } from "../../bindings/AppInfo";
 import type { Config } from "../../bindings/Config";
 import type { JournalState } from "../../bindings/JournalState";
 import type { Refs } from "../../bindings/Refs";
@@ -17,6 +18,7 @@ import { gitActions, PULL_LABELS } from "../ops/actions";
 import { openDialog } from "../ops/dialogs";
 import { describeHead } from "../repo/head";
 import { exportSettings, importSettings, syncKeys } from "../settings/queries";
+import { checkForUpdates } from "../updates/store";
 import { invalidateRepo, keys } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";
 import { updateView, useViews, WORKING_COPY } from "../workspace/view";
@@ -166,6 +168,13 @@ export const COMMANDS: Command[] = [
     run: () => openSettings("profiles"),
   },
   { id: "settings.ssh", title: "SSH keys…", category: "App", run: () => openSettings("ssh") },
+  {
+    id: "app.checkUpdates",
+    title: "Check for updates",
+    category: "App",
+    enabled: (ctx) => data<AppInfo>(ctx, ["appInfo"])?.updatesUnavailable === null,
+    run: () => checkForUpdates(true),
+  },
   {
     id: "settings.export",
     title: "Export settings…",

@@ -49,6 +49,7 @@ export const config: Config = {
     sync: null,
     terminalShell: "",
     accounts: [],
+    checkUpdates: true,
   },
 };
 

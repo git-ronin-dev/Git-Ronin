@@ -24,13 +24,68 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage",
+      "nsis",
+      "app",
+      "dmg"
+    ],
+    "publisher": "Git Ronin contributors",
+    "copyright": "Copyright © 2026 Git Ronin contributors",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../LICENSE",
+    "category": "DeveloperTool",
+    "shortDescription": "A free, cross-platform Git client",
+    "longDescription": "Git Ronin is a free Git client with a commit graph, staging of single lines, a merge conflict editor, interactive rebase, undo, and pull requests from GitHub, GitLab, Bitbucket and Azure DevOps. It runs your own git, so hooks, credential helpers, SSH configuration and signing work as they do on the command line.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "git"
+        ],
+        "section": "vcs",
+        "desktopTemplate": "../packaging/linux/git-ronin.desktop",
+        "files": {
+          "/usr/share/metainfo/com.gitronin.desktop.metainfo.xml": "../packaging/linux/com.gitronin.desktop.metainfo.xml"
+        }
+      },
+      "rpm": {
+        "depends": [
+          "git-core"
+        ],
+        "desktopTemplate": "../packaging/linux/git-ronin.desktop",
+        "files": {
+          "/usr/share/metainfo/com.gitronin.desktop.metainfo.xml": "../packaging/linux/com.gitronin.desktop.metainfo.xml"
+        }
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDYxMTYyQTU2REM1MDZGNDUKUldSRmIxRGNWaW9XWVZVaXNXQnp0N205WmY3bnkwRkZQaDVleEtTNHljTTl4U0dWdHVkMkliU0cK",
+      "endpoints": [],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

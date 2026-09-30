@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.gitronin.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Git Ronin</name>
+  <summary>A free, cross-platform Git client</summary>
+  <developer id="com.gitronin">
+    <name>Git Ronin contributors</name>
+  </developer>
+  <description>
+    <p>
+      Git Ronin is a free Git client. It runs your own git, so hooks, credential helpers,
+      SSH configuration and commit signing work exactly as they do on the command line.
+    </p>
+    <ul>
+      <li>A commit graph for all branches, remotes and tags that opens large repositories instantly</li>
+      <li>Stage whole files, single hunks or single lines, and commit with sign-off or amend</li>
+      <li>Drag a branch onto another to merge, rebase, reset or push it, and undo it afterwards</li>
+      <li>A merge conflict editor, interactive rebase, blame, file history and bisect</li>
+      <li>Submodules, working trees, Git LFS and Git Flow</li>
+      <li>Pull requests, issues and CI checks from GitHub, GitLab, Bitbucket and Azure DevOps</li>
+      <li>Profiles, workspaces, a terminal panel, and settings synced through your own repository</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">Git Ronin.desktop</launchable>
+  <categories>
+    <category>Development</category>
+    <category>RevisionControl</category>
+  </categories>
+  <keywords>
+    <keyword>git</keyword>
+    <keyword>version control</keyword>
+    <keyword>pull request</keyword>
+  </keywords>
+  <provides>
+    <binary>git-ronin</binary>
+  </provides>
+  <requires>
+    <display_length compare="ge">900</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-09-30">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

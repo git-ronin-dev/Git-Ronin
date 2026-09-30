@@ -217,6 +217,20 @@ pub struct Local {
     /// Accounts on hosting services, each belonging to a profile. Tokens
     /// are in the OS keyring, so accounts stay on this machine.
     pub accounts: Vec<Account>,
+    /// Look for a new version at startup and twice a day.
+    pub check_updates: CheckUpdates,
+}
+
+/// Whether to look for new versions by itself. Local, since how the app is
+/// installed (and so updated) differs between machines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, type = "boolean")]
+pub struct CheckUpdates(pub bool);
+
+impl Default for CheckUpdates {
+    fn default() -> Self {
+        Self(true)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -519,6 +533,20 @@ mod tests {
         assert!(warnings.is_empty());
         assert_eq!(store.get().portable.ui.theme, Theme::Dark);
         assert!(store.get().portable.ui.show_avatars);
+    }
+
+    #[test]
+    fn update_checks_default_to_on_and_are_a_plain_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut store, _) = ConfigStore::load(dir.path());
+        assert_eq!(store.get().local.check_updates, CheckUpdates(true));
+        store
+            .update_local(|l| l.check_updates = CheckUpdates(false))
+            .unwrap();
+        let text = fs::read_to_string(dir.path().join("local.toml")).unwrap();
+        assert!(text.contains("checkUpdates = false"), "{text}");
+        let (reloaded, _) = ConfigStore::load(dir.path());
+        assert_eq!(reloaded.get().local.check_updates, CheckUpdates(false));
     }
 
     #[test]

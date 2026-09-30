@@ -63,6 +63,19 @@ export function useSetProfiles() {
   }));
 }
 
+export function useSetCheckUpdates() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ipc.configSetCheckUpdates,
+    onMutate: (checkUpdates: boolean) => {
+      client.setQueryData<Config>(keys.config, (c) =>
+        c ? { ...c, local: { ...c.local, checkUpdates } } : c,
+      );
+    },
+    onError: (err) => toast.error("Could not save settings", String(err)),
+  });
+}
+
 export function useSetTerminalShell() {
   const client = useQueryClient();
   return useMutation({

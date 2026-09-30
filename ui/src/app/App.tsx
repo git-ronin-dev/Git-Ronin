@@ -13,6 +13,7 @@ import { ImportDialog } from "../features/settings/ImportDialog";
 import { syncKeys, useSyncStatus } from "../features/settings/queries";
 import { SettingsDialog } from "../features/settings/SettingsDialog";
 import { StashDialog } from "../features/stash/StashDialog";
+import { useUpdateCheck } from "../features/updates/useUpdateCheck";
 import {
   invalidateRepo,
   invalidateWorktree,
@@ -46,6 +47,7 @@ export function App() {
   useShortcuts();
   useAutoFetch();
   useSyncConflictNotice();
+  useUpdateCheck();
 
   useEffect(() => {
     void useWorkspace.getState().restore();

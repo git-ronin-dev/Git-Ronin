@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name={{name}}
+GenericName=Git Client
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+Icon={{icon}}
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;version control;commit;branch;merge;rebase;pull request;
+StartupWMClass={{exec}}
+StartupNotify=true

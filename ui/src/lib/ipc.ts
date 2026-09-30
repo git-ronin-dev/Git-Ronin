@@ -2,6 +2,8 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { AccountView } from "../bindings/AccountView";
+import type { AppInfo } from "../bindings/AppInfo";
+import type { AvailableUpdate } from "../bindings/AvailableUpdate";
 import type { BisectMark } from "../bindings/BisectMark";
 import type { BisectState } from "../bindings/BisectState";
 import type { Blame } from "../bindings/Blame";
@@ -61,6 +63,7 @@ import type { StashOptions } from "../bindings/StashOptions";
 import type { StatusEntry } from "../bindings/StatusEntry";
 import type { SyncStatus } from "../bindings/SyncStatus";
 import type { UiPrefs } from "../bindings/UiPrefs";
+import type { UpdateProgress } from "../bindings/UpdateProgress";
 import type { WorkingStatus } from "../bindings/WorkingStatus";
 import type { Workspace } from "../bindings/Workspace";
 import type { Worktree } from "../bindings/Worktree";
@@ -68,6 +71,19 @@ import type { Worktree } from "../bindings/Worktree";
 /** Typed wrappers for the Rust commands in src-tauri/src/commands.rs. */
 export const ipc = {
   gitVersion: () => invoke<GitVersion>("git_version"),
+
+  /** Only http(s) addresses. */
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
+
+  appInfo: () => invoke<AppInfo>("app_info"),
+  /** Rejects with the reason when this build can't update itself. */
+  updateCheck: () => invoke<AvailableUpdate | null>("update_check"),
+  /** Installs what the last check found, then restarts the app. */
+  updateInstall: (onProgress: (p: UpdateProgress) => void) => {
+    const channel = new Channel<UpdateProgress>();
+    channel.onmessage = onProgress;
+    return invoke<void>("update_install", { onProgress: channel });
+  },
 
   configGet: () => invoke<Config>("config_get"),
   configTakeWarnings: () => invoke<string[]>("config_take_warnings"),
@@ -79,6 +95,7 @@ export const ipc = {
   configSetProfiles: (profiles: Profile[]) =>
     invoke<string | null>("config_set_profiles", { profiles }),
   configSetTerminalShell: (shell: string) => invoke<void>("config_set_terminal_shell", { shell }),
+  configSetCheckUpdates: (check: boolean) => invoke<void>("config_set_check_updates", { check }),
   /** Closes every repository; restore the new profile's tabs afterwards. */
   profileActivate: (id: string) => invoke<string | null>("profile_activate", { id }),
   gitIdentity: () => invoke<Identity>("git_identity"),

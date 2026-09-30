@@ -1,0 +1,186 @@
+name: Release
+
+# Pushing a tag such as v0.2.0 builds every bundle and uploads them to a
+# draft GitHub release, with the signed `latest.json` the updater reads.
+# Publishing the draft makes it the update. Running the workflow by hand
+# builds the same bundles as artifacts, without a release.
+#
+# Secrets (all optional; without them the matching step is skipped):
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+#     sign updates (`npx tauri signer generate`); the public key is in
+#     src-tauri/tauri.conf.json. Without them the builds don't update.
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+#     sign and notarize the macOS app; without them it is signed ad hoc.
+# Variables: RONIN_GITHUB_CLIENT_ID, RONIN_GITLAB_CLIENT_ID (OAuth apps for
+# browser sign-in).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported Ubuntu, so the AppImage runs on older glibc.
+          - os: ubuntu-22.04
+            args: ""
+          - os: windows-latest
+            args: ""
+          - os: macos-latest
+            args: --target universal-apple-darwin
+    runs-on: ${{ matrix.os }}
+    env:
+      RONIN_GITHUB_CLIENT_ID: ${{ vars.RONIN_GITHUB_CLIENT_ID }}
+      RONIN_GITLAB_CLIENT_ID: ${{ vars.RONIN_GITLAB_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${version} in Cargo.toml"
+            exit 1
+          fi
+
+      - name: Install webview dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - run: rustup show active-toolchain || rustup toolchain install
+      - if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Release settings
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # The bundler treats a variable that is set but empty as given, so
+          # only what exists is exported.
+          if [ -n "$SIGNING_KEY" ]; then
+            {
+              echo "TAURI_SIGNING_PRIVATE_KEY<<EOF"
+              echo "$SIGNING_KEY"
+              echo "EOF"
+              echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$SIGNING_KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+            cat > release.conf.json <<EOF
+          {
+            "bundle": { "createUpdaterArtifacts": true },
+            "plugins": {
+              "updater": {
+                "endpoints": ["https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/latest.json"]
+              }
+            }
+          }
+          EOF
+          else
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: these builds will not update themselves."
+            echo '{}' > release.conf.json
+          fi
+          if [ "$RUNNER_OS" = macOS ]; then
+            if [ -n "$APPLE_CERTIFICATE" ]; then
+              for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+                APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+                if [ -n "${!name}" ]; then
+                  echo "$name=${!name}" >> "$GITHUB_ENV"
+                fi
+              done
+            else
+              # Ad hoc: runs on Apple silicon after the Gatekeeper warning.
+              echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            fi
+          fi
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx tauri
+          args: ${{ matrix.args }} --config release.conf.json
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && 'Git Ronin __VERSION__' || '' }}
+          releaseBody: See the assets below to download and install this version.
+          releaseDraft: true
+          prerelease: false
+          releaseAssetNamePattern: git-ronin_[version]_[arch][setup][ext]
+          updaterJsonPreferNsis: true
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: bundle-[platform]-[bundle]
+
+  flatpak:
+    needs: bundle
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: bundle-linux-deb
+          path: deb
+          merge-multiple: true
+      - run: find deb -name '*.deb' -exec cp {} packaging/flatpak/git-ronin.deb \;
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: git-ronin.flatpak
+          manifest-path: packaging/flatpak/com.gitronin.desktop.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+          upload-artifact: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: git-ronin.flatpak
+
+  # Outside the Flatpak container, which has no gh.
+  flatpak-release:
+    if: github.ref_type == 'tag'
+    needs: flatpak
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: flatpak
+      - name: Attach the Flatpak and a Flathub manifest to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          deb=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name | select(endswith(".deb"))')
+          gh release download "$GITHUB_REF_NAME" --pattern "$deb" --output git-ronin.deb
+          sum=$(sha256sum git-ronin.deb | cut -d' ' -f1)
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${deb}"
+          sed -e "s|path: git-ronin.deb|url: ${url}\n        sha256: ${sum}\n        dest-filename: git-ronin.deb|" \
+            packaging/flatpak/com.gitronin.desktop.yml > com.gitronin.desktop.yml
+          mv git-ronin.flatpak "git-ronin_${version}_x86_64.flatpak"
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            "git-ronin_${version}_x86_64.flatpak" com.gitronin.desktop.yml

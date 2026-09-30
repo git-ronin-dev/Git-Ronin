@@ -49,7 +49,8 @@ impl fmt::Display for GitVersion {
 pub struct GitCli {
     exe: PathBuf,
     version: GitVersion,
-    env: Vec<(OsString, OsString)>,
+    /// Changes to the environment of every run; `None` removes a variable.
+    env: Vec<(OsString, Option<OsString>)>,
 }
 
 impl GitCli {
@@ -58,9 +59,20 @@ impl GitCli {
         Self::with_executable("git")
     }
 
+    /// Like [`discover`](Self::discover), with changes to git's environment
+    /// (`None` removes a variable) that already apply to the version check.
+    pub fn discover_with(env: Vec<(OsString, Option<OsString>)>) -> Result<Self> {
+        Self::open("git".into(), env)
+    }
+
     pub fn with_executable(exe: impl Into<PathBuf>) -> Result<Self> {
-        let exe = exe.into();
-        let output = Command::new(&exe)
+        Self::open(exe.into(), Vec::new())
+    }
+
+    fn open(exe: PathBuf, env: Vec<(OsString, Option<OsString>)>) -> Result<Self> {
+        let mut probe = Command::new(&exe);
+        apply_env(&mut probe, &env);
+        let output = probe
             .arg("--version")
             .output()
             .map_err(|e| match e.kind() {
@@ -72,17 +84,13 @@ impl GitCli {
         if version < MIN_GIT_VERSION {
             return Err(Error::GitTooOld { found: version });
         }
-        Ok(Self {
-            exe,
-            version,
-            env: Vec::new(),
-        })
+        Ok(Self { exe, version, env })
     }
 
     /// Adds an environment variable to every git invocation.
     pub fn env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
         self.env
-            .push((key.as_ref().to_owned(), value.as_ref().to_owned()));
+            .push((key.as_ref().to_owned(), Some(value.as_ref().to_owned())));
         self
     }
 
@@ -269,8 +277,8 @@ impl GitCli {
             // Commands that would open an editor (merge --continue, revert,
             // rebase --continue) keep the message git prepared.
             .env("GIT_EDITOR", "true")
-            .envs(self.env.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::null());
+        apply_env(&mut cmd, &self.env);
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -278,6 +286,15 @@ impl GitCli {
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
         cmd
+    }
+}
+
+fn apply_env(cmd: &mut Command, env: &[(OsString, Option<OsString>)]) {
+    for (key, value) in env {
+        match value {
+            Some(value) => cmd.env(key, value),
+            None => cmd.env_remove(key),
+        };
     }
 }
 

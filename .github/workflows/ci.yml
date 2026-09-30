@@ -17,6 +17,16 @@ jobs:
       - run: npm ci
       - run: npm run check
 
+  packaging:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y appstream
+      # No homepage until the project has a public one.
+      - run: >
+          appstreamcli validate --no-net --override=url-homepage-missing=info
+          packaging/linux/com.gitronin.desktop.metainfo.xml
+
   rust:
     strategy:
       fail-fast: false
