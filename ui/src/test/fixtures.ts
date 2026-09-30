@@ -16,8 +16,31 @@ export const config: Config = {
   portable: {
     ui: { theme: "dark", showAvatars: false, diffView: "unified", ignoreWhitespace: false },
     git: { autoFetchMinutes: 0 },
+    keybindings: {},
+    profiles: [
+      {
+        id: "default",
+        name: "Default",
+        userName: "",
+        userEmail: "",
+        signingKey: "",
+        signingFormat: "openpgp",
+        signCommits: false,
+        sshKey: "",
+      },
+    ],
   },
-  local: { recentRepos: ["/work/ronin"], openTabs: [], activeTab: null, repos: {} },
+  local: {
+    recentRepos: ["/work/ronin"],
+    openTabs: [],
+    activeTab: null,
+    repos: {},
+    activeProfile: "default",
+    profileTabs: {},
+    workspaces: [],
+    sync: null,
+    terminalShell: "",
+  },
 };
 
 export const refs: Refs = {

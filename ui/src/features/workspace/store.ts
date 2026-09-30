@@ -25,6 +25,10 @@ interface WorkspaceState {
   adopt: (info: RepoInfo) => void;
   close: (path: string) => Promise<void>;
   activate: (path: string) => void;
+  /** Switches profile and shows its tabs. */
+  switchProfile: (id: string) => Promise<void>;
+  /** Called after a profile switch, so settings and data can be reloaded. */
+  onProfileSwitch: () => void;
 }
 
 const reportError = (title: string) => (err: unknown) => toast.error(title, String(err));
@@ -97,4 +101,21 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
     set({ active: path });
     void ipc.setActiveTab(path).catch(() => {});
   },
+
+  switchProfile: async (id) => {
+    set({ opening: true });
+    try {
+      const warning = await ipc.profileActivate(id);
+      if (warning) toast.error("Profile not fully applied", warning);
+      set({ tabs: [], active: null });
+      get().onProfileSwitch();
+      await get().restore();
+    } catch (err) {
+      reportError("Could not switch profile")(err);
+    } finally {
+      set({ opening: false });
+    }
+  },
+
+  onProfileSwitch: () => {},
 }));

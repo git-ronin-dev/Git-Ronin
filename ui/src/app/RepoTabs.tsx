@@ -1,9 +1,13 @@
 import { clsx } from "clsx";
-import { Plus, X } from "lucide-react";
+import { Plus, UserRound, X } from "lucide-react";
+import { forwardRef, type ComponentProps } from "react";
 
+import { activeProfileId } from "../features/commands/commands";
 import { openDialog } from "../features/ops/dialogs";
+import { useConfig } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
 import { DropdownMenu } from "../ui/DropdownMenu";
+import { openSettings, useOverlays } from "./overlays";
 
 export function RepoTabs() {
   const { tabs, active, activate, close, pickAndOpen, pickAndInit } = useWorkspace();
@@ -51,6 +55,8 @@ export function RepoTabs() {
           { label: "Open repository… (Ctrl+O)", onSelect: () => void pickAndOpen() },
           { label: "Clone…", onSelect: () => openDialog({ kind: "clone" }) },
           { label: "New repository…", onSelect: () => void pickAndInit() },
+          "separator",
+          { label: "Workspaces…", onSelect: () => useOverlays.setState({ workspaces: true }) },
         ]}
       >
         <button
@@ -61,6 +67,50 @@ export function RepoTabs() {
           <Plus className="size-4" />
         </button>
       </DropdownMenu>
+      <ProfileMenu />
     </div>
   );
 }
+
+/** The profile in use; switches to another. */
+function ProfileMenu() {
+  const config = useConfig().data;
+  const switchProfile = useWorkspace((s) => s.switchProfile);
+  const profiles = config?.portable.profiles ?? [];
+  const active = activeProfileId(config);
+  const current = profiles.find((p) => p.id === active);
+  if (!current) return null;
+  return (
+    <DropdownMenu
+      align="end"
+      items={[
+        ...profiles.map((p) => ({
+          label: `${p.id === active ? "✓" : "\u2003"} ${p.name}`,
+          disabled: p.id === active,
+          onSelect: () => void switchProfile(p.id),
+        })),
+        "separator",
+        { label: "Manage profiles…", onSelect: () => openSettings("profiles") },
+      ]}
+    >
+      <ProfileButton name={current.name} />
+    </DropdownMenu>
+  );
+}
+
+const ProfileButton = forwardRef<HTMLButtonElement, ComponentProps<"button"> & { name: string }>(
+  function ProfileButton({ name, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        aria-label={`Profile: ${name}`}
+        {...props}
+        className="mb-1 ml-auto flex h-7 max-w-40 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        <UserRound className="size-3.5 shrink-0" />
+        <span className="truncate">{name}</span>
+      </button>
+    );
+  },
+);

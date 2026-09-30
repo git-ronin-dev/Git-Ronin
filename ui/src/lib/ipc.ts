@@ -1,10 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { BisectMark } from "../bindings/BisectMark";
 import type { BisectState } from "../bindings/BisectState";
 import type { Blame } from "../bindings/Blame";
 import type { BlobSource } from "../bindings/BlobSource";
+import type { Change } from "../bindings/Change";
 import type { CommitDetail } from "../bindings/CommitDetail";
 import type { CommitOptions } from "../bindings/CommitOptions";
 import type { CommitResult } from "../bindings/CommitResult";
@@ -15,10 +16,13 @@ import type { FileCommit } from "../bindings/FileCommit";
 import type { FileDiff } from "../bindings/FileDiff";
 import type { FlowConfig } from "../bindings/FlowConfig";
 import type { FlowKind } from "../bindings/FlowKind";
+import type { GitPrefs } from "../bindings/GitPrefs";
 import type { GitVersion } from "../bindings/GitVersion";
 import type { GraphPage } from "../bindings/GraphPage";
 import type { Hunk } from "../bindings/Hunk";
+import type { Identity } from "../bindings/Identity";
 import type { IgnoreScope } from "../bindings/IgnoreScope";
+import type { ImportMode } from "../bindings/ImportMode";
 import type { JournalState } from "../bindings/JournalState";
 import type { LfsLock } from "../bindings/LfsLock";
 import type { LfsStatus } from "../bindings/LfsStatus";
@@ -26,6 +30,7 @@ import type { LineSelection } from "../bindings/LineSelection";
 import type { OperationAction } from "../bindings/OperationAction";
 import type { Outcome } from "../bindings/Outcome";
 import type { PatchTarget } from "../bindings/PatchTarget";
+import type { Profile } from "../bindings/Profile";
 import type { PullMode } from "../bindings/PullMode";
 import type { PushOutcome } from "../bindings/PushOutcome";
 import type { PushTarget } from "../bindings/PushTarget";
@@ -33,12 +38,16 @@ import type { RebasePlan } from "../bindings/RebasePlan";
 import type { RebaseStep } from "../bindings/RebaseStep";
 import type { Refs } from "../bindings/Refs";
 import type { RepoInfo } from "../bindings/RepoInfo";
+import type { RepoSummary } from "../bindings/RepoSummary";
 import type { ResetMode } from "../bindings/ResetMode";
 import type { Resolution } from "../bindings/Resolution";
+import type { SshKey } from "../bindings/SshKey";
 import type { StashOptions } from "../bindings/StashOptions";
 import type { StatusEntry } from "../bindings/StatusEntry";
+import type { SyncStatus } from "../bindings/SyncStatus";
 import type { UiPrefs } from "../bindings/UiPrefs";
 import type { WorkingStatus } from "../bindings/WorkingStatus";
+import type { Workspace } from "../bindings/Workspace";
 import type { Worktree } from "../bindings/Worktree";
 
 /** Typed wrappers for the Rust commands in src-tauri/src/commands.rs. */
@@ -48,6 +57,48 @@ export const ipc = {
   configGet: () => invoke<Config>("config_get"),
   configTakeWarnings: () => invoke<string[]>("config_take_warnings"),
   configSetUi: (ui: UiPrefs) => invoke<void>("config_set_ui", { ui }),
+  configSetGit: (git: GitPrefs) => invoke<void>("config_set_git", { git }),
+  configSetKeybindings: (keybindings: Record<string, string>) =>
+    invoke<void>("config_set_keybindings", { keybindings }),
+  /** Resolves to a warning if the active profile could not be applied. */
+  configSetProfiles: (profiles: Profile[]) =>
+    invoke<string | null>("config_set_profiles", { profiles }),
+  configSetTerminalShell: (shell: string) => invoke<void>("config_set_terminal_shell", { shell }),
+  /** Closes every repository; restore the new profile's tabs afterwards. */
+  profileActivate: (id: string) => invoke<string | null>("profile_activate", { id }),
+  gitIdentity: () => invoke<Identity>("git_identity"),
+
+  settingsExport: (path: string) => invoke<void>("settings_export", { path }),
+  settingsImportPreview: (path: string, mode: ImportMode) =>
+    invoke<Change[]>("settings_import_preview", { path, mode }),
+  settingsImport: (path: string, mode: ImportMode) =>
+    invoke<string | null>("settings_import", { path, mode }),
+
+  syncStatus: () => invoke<SyncStatus>("sync_status"),
+  syncEnable: (remote: string, branch: string, pushMinutes: number) =>
+    invoke<SyncStatus>("sync_enable", { remote, branch, pushMinutes }),
+  syncDisable: () => invoke<SyncStatus>("sync_disable"),
+  syncNow: () => invoke<SyncStatus>("sync_now"),
+  /** For each conflict, `true` takes the other machine's value. */
+  syncResolve: (takeTheirs: boolean[]) => invoke<SyncStatus>("sync_resolve", { takeTheirs }),
+
+  sshKeys: () => invoke<SshKey[]>("ssh_keys"),
+  sshGenerate: (name: string, comment: string, passphrase: string) =>
+    invoke<SshKey>("ssh_generate", { name, comment, passphrase }),
+
+  workspacesSet: (workspaces: Workspace[]) => invoke<void>("workspaces_set", { workspaces }),
+  repoSummary: (path: string) => invoke<RepoSummary>("repo_summary", { path }),
+  fetchPath: (path: string) => invoke<void>("fetch_path", { path }),
+
+  terminalOpen: (cwd: string, cols: number, rows: number, onEvent: (e: TerminalEvent) => void) => {
+    const channel = new Channel<TerminalEvent>();
+    channel.onmessage = onEvent;
+    return invoke<number>("terminal_open", { cwd, cols, rows, onEvent: channel });
+  },
+  terminalWrite: (id: number, data: string) => invoke<void>("terminal_write", { id, data }),
+  terminalResize: (id: number, cols: number, rows: number) =>
+    invoke<void>("terminal_resize", { id, cols, rows }),
+  terminalClose: (id: number) => invoke<void>("terminal_close", { id }),
 
   openRepo: (path: string) => invoke<RepoInfo>("open_repo", { path }),
   restoreTabs: () => invoke<RepoInfo[]>("restore_tabs"),
@@ -224,6 +275,12 @@ export const ipc = {
     invoke<void>("credential_respond", { id, answer }),
 };
 
+/** Output from a terminal panel's shell, or its exit. */
+export type TerminalEvent =
+  | { kind: "data"; data: string }
+  /** `code` is null when the shell was killed. */
+  | { kind: "exit"; code: number | null };
+
 /** A progress update from a long-running command. */
 export interface ProgressEvent {
   /** The repository path, or the destination of a clone. */
@@ -257,4 +314,14 @@ export function onRepoChanged(handler: (repo: string) => void): Promise<Unlisten
 /** Fires with the repository path when its index or working tree change on disk. */
 export function onWorktreeChanged(handler: (repo: string) => void): Promise<UnlistenFn> {
   return listen<string>("worktree-changed", (event) => handler(event.payload));
+}
+
+/** Fires when the portable settings changed underneath the UI (a sync). */
+export function onConfigChanged(handler: () => void): Promise<UnlistenFn> {
+  return listen("config-changed", () => handler());
+}
+
+/** Fires when the settings sync status changed. */
+export function onSyncChanged(handler: () => void): Promise<UnlistenFn> {
+  return listen("sync-changed", () => handler());
 }

@@ -1,4 +1,5 @@
 import { clsx } from "clsx";
+import { useEffect, useState } from "react";
 import { Group, Panel, usePanelRef, type PanelImperativeHandle } from "react-resizable-panels";
 
 import { ChangesPanel } from "../features/changes/ChangesPanel";
@@ -12,10 +13,12 @@ import { FileHistoryPanel } from "../features/history/FileHistoryPanel";
 import { OperationBanner } from "../features/ops/OperationBanner";
 import { RebaseEditor } from "../features/rebase/RebaseEditor";
 import { Sidebar } from "../features/refs/Sidebar";
+import { TerminalPanel } from "../features/terminal/TerminalPanel";
 import { useWorkspace } from "../features/workspace/store";
 import { WORKING_COPY, updateView, useRepoView } from "../features/workspace/view";
 import { ResizeHandle } from "../ui/ResizeHandle";
 import { EmptyState } from "./EmptyState";
+import { useOverlays } from "./overlays";
 import { RepoTabs } from "./RepoTabs";
 import { StatusBar } from "./StatusBar";
 import { Toolbar } from "./Toolbar";
@@ -30,6 +33,13 @@ export function AppShell() {
   const { tabs, active } = useWorkspace();
   const sidebar = usePanelRef();
   const details = usePanelRef();
+
+  useEffect(() => {
+    useOverlays.setState({
+      toggleSidebar: () => toggle(sidebar.current),
+      toggleDetails: () => toggle(details.current),
+    });
+  }, [sidebar, details]);
 
   return (
     <div className="flex h-full flex-col">
@@ -86,10 +96,22 @@ export function AppShell() {
   );
 }
 
-/** Graph, or an open file (or the interactive rebase editor) on top of it. */
+/** Graph, or an open file (or the interactive rebase editor) on top of it; the terminal below. */
 function RepoMain({ repo }: { repo: string }) {
-  const { openFile, rebase } = useRepoView(repo);
-  return (
+  const { openFile, rebase, terminal } = useRepoView(repo);
+  const panel = usePanelRef();
+  // The shell starts the first time the terminal is shown and then keeps running.
+  const [started, setStarted] = useState(terminal);
+  if (terminal && !started) setStarted(true);
+
+  useEffect(() => {
+    const p = panel.current;
+    if (!p) return;
+    if (terminal && p.isCollapsed()) p.expand();
+    else if (!terminal && !p.isCollapsed()) p.collapse();
+  }, [terminal, started, panel]);
+
+  const main = (
     <div className="flex h-full flex-col">
       <OperationBanner repo={repo} />
       <div className="min-h-0 flex-1">
@@ -103,6 +125,29 @@ function RepoMain({ repo }: { repo: string }) {
         )}
       </div>
     </div>
+  );
+  if (!started) return main;
+  return (
+    <Group id={`repo-main-${repo}`} orientation="vertical" className="h-full">
+      <Panel id="main" minSize={160}>
+        {main}
+      </Panel>
+      <ResizeHandle horizontal />
+      <Panel
+        id="terminal"
+        panelRef={panel}
+        defaultSize={260}
+        minSize={100}
+        collapsible
+        collapsedSize={0}
+        onResize={(size) => {
+          // Dragged shut.
+          if (size.inPixels === 0 && terminal) updateView(repo, { terminal: false });
+        }}
+      >
+        <TerminalPanel repo={repo} visible={terminal} />
+      </Panel>
+    </Group>
   );
 }
 

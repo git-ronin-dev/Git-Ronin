@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use ronin_config::{Config, UiPrefs};
+use ronin_config::Config;
 use ronin_git::{
     BisectMark, BisectState, Blame, BlobSource, CommitDetail, CommitOptions, CommitResult,
     Conflict, DiffOptions, FileCommit, FileDiff, FlowConfig, FlowKind, GitVersion, GraphPage, Hunk,
@@ -38,7 +38,7 @@ struct ProgressEvent {
 }
 
 /// Forwards progress to the UI as `PROGRESS` events, skipping repeats.
-fn reporter(app: &AppHandle, key: &str) -> impl FnMut(Progress) + use<> {
+pub(crate) fn reporter(app: &AppHandle, key: &str) -> impl FnMut(Progress) + use<> {
     let app = app.clone();
     let key = key.to_owned();
     let mut last: Option<Progress> = None;
@@ -67,7 +67,7 @@ fn short(rev: &str) -> &str {
     }
 }
 
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     app: &AppHandle,
     f: impl FnOnce(&AppHandle, &AppState) -> CmdResult<T> + Send + 'static,
 ) -> CmdResult<T> {
@@ -93,14 +93,6 @@ pub fn config_take_warnings(state: tauri::State<'_, AppState>) -> Vec<String> {
     std::mem::take(&mut lock(&state.config_warnings))
 }
 
-#[tauri::command]
-pub async fn config_set_ui(app: AppHandle, ui: UiPrefs) -> CmdResult<()> {
-    blocking(&app, move |_, s| {
-        s.config().update_portable(|p| p.ui = ui).map_err(err)
-    })
-    .await
-}
-
 /// Opens a repository in a new tab and records it as recent.
 #[tauri::command]
 pub async fn open_repo(app: AppHandle, path: PathBuf) -> CmdResult<RepoInfo> {
@@ -117,7 +109,7 @@ pub async fn clone_repo(
 ) -> CmdResult<RepoInfo> {
     blocking(&app, move |app, s| {
         let key = parent.join(&name).to_string_lossy().into_owned();
-        let dest = ronin_git::clone(s.git()?, &url, &parent, &name, &mut reporter(app, &key))
+        let dest = ronin_git::clone(&s.git()?, &url, &parent, &name, &mut reporter(app, &key))
             .map_err(err)?;
         open_tab(app, s, &dest)
     })
@@ -134,7 +126,7 @@ pub fn clone_name(url: String) -> Option<String> {
 #[tauri::command]
 pub async fn init_repo(app: AppHandle, path: PathBuf) -> CmdResult<RepoInfo> {
     blocking(&app, move |app, s| {
-        ronin_git::init(s.git()?, &path).map_err(err)?;
+        ronin_git::init(&s.git()?, &path).map_err(err)?;
         open_tab(app, s, &path)
     })
     .await
@@ -199,7 +191,7 @@ pub async fn repo_info(app: AppHandle, repo: String) -> CmdResult<RepoInfo> {
 pub async fn list_refs(app: AppHandle, repo: String) -> CmdResult<Refs> {
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
-        ronin_git::list_refs(s.git()?, &session.path).map_err(err)
+        ronin_git::list_refs(&s.git()?, &session.path).map_err(err)
     })
     .await
 }
@@ -271,7 +263,7 @@ pub async fn set_graph_filter(
 pub async fn commit_detail(app: AppHandle, repo: String, oid: String) -> CmdResult<CommitDetail> {
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
-        ronin_git::commit_detail(s.git()?, &session.path, &oid).map_err(err)
+        ronin_git::commit_detail(&s.git()?, &session.path, &oid).map_err(err)
     })
     .await
 }
@@ -290,7 +282,7 @@ pub async fn file_diff(
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
         ronin_git::file_diff(
-            s.git()?,
+            &s.git()?,
             &session.path,
             base.as_deref(),
             &target,
@@ -319,7 +311,7 @@ pub async fn blob(app: AppHandle, repo: String, oid: String, path: String) -> Cm
 #[tauri::command]
 pub async fn working_status(app: AppHandle, repo: String) -> CmdResult<WorkingStatus> {
     blocking(&app, move |_, s| {
-        ronin_git::status(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::status(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -336,7 +328,7 @@ pub async fn working_diff(
 ) -> CmdResult<FileDiff> {
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
-        ronin_git::working_diff(s.git()?, &session.path, &entry, staged, options).map_err(err)
+        ronin_git::working_diff(&s.git()?, &session.path, &entry, staged, options).map_err(err)
     })
     .await
 }
@@ -361,7 +353,7 @@ pub async fn working_blob(
 #[tauri::command]
 pub async fn stage_files(app: AppHandle, repo: String, paths: Vec<String>) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::stage_files(s.git()?, &s.session(&repo)?.path, &paths).map_err(err)
+        ronin_git::stage_files(&s.git()?, &s.session(&repo)?.path, &paths).map_err(err)
     })
     .await
 }
@@ -369,7 +361,7 @@ pub async fn stage_files(app: AppHandle, repo: String, paths: Vec<String>) -> Cm
 #[tauri::command]
 pub async fn unstage_files(app: AppHandle, repo: String, paths: Vec<String>) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::unstage_files(s.git()?, &s.session(&repo)?.path, &paths).map_err(err)
+        ronin_git::unstage_files(&s.git()?, &s.session(&repo)?.path, &paths).map_err(err)
     })
     .await
 }
@@ -381,7 +373,7 @@ pub async fn discard_files(
     entries: Vec<StatusEntry>,
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::discard_files(s.git()?, &s.session(&repo)?.path, &entries).map_err(err)
+        ronin_git::discard_files(&s.git()?, &s.session(&repo)?.path, &entries).map_err(err)
     })
     .await
 }
@@ -399,7 +391,7 @@ pub async fn apply_lines(
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
-        ronin_git::apply_lines(s.git()?, &session.path, &path, &hunks, &selection, target)
+        ronin_git::apply_lines(&s.git()?, &session.path, &path, &hunks, &selection, target)
             .map_err(err)
     })
     .await
@@ -438,7 +430,7 @@ pub async fn head_message(app: AppHandle, repo: String) -> CmdResult<Option<Stri
 #[tauri::command]
 pub async fn stash_push(app: AppHandle, repo: String, options: StashOptions) -> CmdResult<bool> {
     blocking(&app, move |_, s| {
-        let created = ronin_git::stash_push(s.git()?, &s.session(&repo)?.path, &options);
+        let created = ronin_git::stash_push(&s.git()?, &s.session(&repo)?.path, &options);
         s.refs_moved(&repo);
         created.map_err(err)
     })
@@ -454,7 +446,7 @@ pub async fn stash_apply(
     pop: bool,
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        let result = ronin_git::stash_apply(s.git()?, &s.session(&repo)?.path, index, &oid, pop);
+        let result = ronin_git::stash_apply(&s.git()?, &s.session(&repo)?.path, index, &oid, pop);
         s.refs_moved(&repo);
         result.map_err(err)
     })
@@ -464,7 +456,7 @@ pub async fn stash_apply(
 #[tauri::command]
 pub async fn stash_drop(app: AppHandle, repo: String, index: u32, oid: String) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        let result = ronin_git::stash_drop(s.git()?, &s.session(&repo)?.path, index, &oid);
+        let result = ronin_git::stash_drop(&s.git()?, &s.session(&repo)?.path, index, &oid);
         s.refs_moved(&repo);
         result.map_err(err)
     })
@@ -490,7 +482,7 @@ pub async fn journal_state(app: AppHandle, repo: String) -> CmdResult<JournalSta
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
         let mut journal = lock(&session.journal);
-        journal.state(s.git()?, &session.path).map_err(err)
+        journal.state(&s.git()?, &session.path).map_err(err)
     })
     .await
 }
@@ -500,7 +492,7 @@ pub async fn journal_state(app: AppHandle, repo: String) -> CmdResult<JournalSta
 pub async fn undo(app: AppHandle, repo: String, redo: bool) -> CmdResult<String> {
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
-        let git = s.git()?;
+        let git = &s.git()?;
         let mut journal = lock(&session.journal);
         let result = if redo {
             journal.redo(git, &session.path)
@@ -590,7 +582,7 @@ pub async fn rename_branch(
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
         let mut journal = lock(&session.journal);
-        let result = ronin_git::rename_branch(s.git()?, &session.path, &old, &new);
+        let result = ronin_git::rename_branch(&s.git()?, &session.path, &old, &new);
         s.refs_moved(&repo);
         result.map_err(err)?;
         journal.record_rename(format!("Rename {old} to {new}"), &old, &new);
@@ -640,7 +632,7 @@ pub async fn set_upstream(
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
         let result = ronin_git::set_upstream(
-            s.git()?,
+            &s.git()?,
             &s.session(&repo)?.path,
             &name,
             upstream.as_deref(),
@@ -686,7 +678,7 @@ pub async fn delete_tag(app: AppHandle, repo: String, name: String) -> CmdResult
 #[tauri::command]
 pub async fn add_remote(app: AppHandle, repo: String, name: String, url: String) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        let result = ronin_git::add_remote(s.git()?, &s.session(&repo)?.path, &name, &url);
+        let result = ronin_git::add_remote(&s.git()?, &s.session(&repo)?.path, &name, &url);
         s.refs_moved(&repo);
         result.map_err(err)
     })
@@ -704,7 +696,7 @@ pub async fn edit_remote(
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
         let result = ronin_git::edit_remote(
-            s.git()?,
+            &s.git()?,
             &s.session(&repo)?.path,
             &name,
             &new_name,
@@ -720,7 +712,7 @@ pub async fn edit_remote(
 #[tauri::command]
 pub async fn remove_remote(app: AppHandle, repo: String, name: String) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        let result = ronin_git::remove_remote(s.git()?, &s.session(&repo)?.path, &name);
+        let result = ronin_git::remove_remote(&s.git()?, &s.session(&repo)?.path, &name);
         s.refs_moved(&repo);
         result.map_err(err)
     })
@@ -742,7 +734,7 @@ pub async fn fetch(
         let git = if background {
             s.background_git()?
         } else {
-            s.git()?.clone()
+            s.git()?
         };
         let mut report = reporter(app, &repo);
         let mut quiet = |_| {};
@@ -781,7 +773,7 @@ pub async fn push_branch(
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
         let result = ronin_git::push_branch(
-            s.git()?,
+            &s.git()?,
             &session.path,
             &name,
             target.as_ref(),
@@ -805,7 +797,7 @@ pub async fn push_tag(
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
         let result = ronin_git::push_tag(
-            s.git()?,
+            &s.git()?,
             &session.path,
             &remote,
             &name,
@@ -829,7 +821,7 @@ pub async fn delete_remote_ref(
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
         let result = ronin_git::delete_remote_ref(
-            s.git()?,
+            &s.git()?,
             &session.path,
             &remote,
             &full_ref,
@@ -913,7 +905,7 @@ pub async fn resolve_operation(
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
-        let result = ronin_git::resolve_operation(s.git()?, &session.path, action);
+        let result = ronin_git::resolve_operation(&s.git()?, &session.path, action);
         s.refs_moved(&repo);
         result.map_err(err)
     })
@@ -934,7 +926,7 @@ pub async fn pending_message(app: AppHandle, repo: String) -> CmdResult<Option<S
 #[tauri::command]
 pub async fn conflict(app: AppHandle, repo: String, path: String) -> CmdResult<Conflict> {
     blocking(&app, move |_, s| {
-        ronin_git::conflict(s.git()?, &s.session(&repo)?.path, &path).map_err(err)
+        ronin_git::conflict(&s.git()?, &s.session(&repo)?.path, &path).map_err(err)
     })
     .await
 }
@@ -948,7 +940,7 @@ pub async fn resolve_conflict(
     resolution: Resolution,
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::resolve_conflict(s.git()?, &s.session(&repo)?.path, &path, &resolution)
+        ronin_git::resolve_conflict(&s.git()?, &s.session(&repo)?.path, &path, &resolution)
             .map_err(err)
     })
     .await
@@ -962,7 +954,7 @@ pub async fn rebase_plan(
     base: Option<String>,
 ) -> CmdResult<RebasePlan> {
     blocking(&app, move |_, s| {
-        ronin_git::rebase_plan(s.git()?, &s.session(&repo)?.path, base.as_deref()).map_err(err)
+        ronin_git::rebase_plan(&s.git()?, &s.session(&repo)?.path, base.as_deref()).map_err(err)
     })
     .await
 }
@@ -996,7 +988,7 @@ pub async fn blame(
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
         ronin_git::blame(
-            s.git()?,
+            &s.git()?,
             &session.path,
             &path,
             rev.as_deref(),
@@ -1019,7 +1011,7 @@ pub async fn file_log(
 ) -> CmdResult<Vec<FileCommit>> {
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
-        ronin_git::file_log(s.git()?, &session.path, &path, rev.as_deref(), skip, limit)
+        ronin_git::file_log(&s.git()?, &session.path, &path, rev.as_deref(), skip, limit)
             .map_err(err)
     })
     .await
@@ -1036,7 +1028,7 @@ pub async fn add_submodule(
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
         let result = ronin_git::add_submodule(
-            s.git()?,
+            &s.git()?,
             &session.path,
             &url,
             &path,
@@ -1056,7 +1048,7 @@ pub async fn update_submodules(app: AppHandle, repo: String, paths: Vec<String>)
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
         let result = ronin_git::update_submodules(
-            s.git()?,
+            &s.git()?,
             &session.path,
             &paths,
             &mut reporter(app, &repo),
@@ -1070,7 +1062,7 @@ pub async fn update_submodules(app: AppHandle, repo: String, paths: Vec<String>)
 #[tauri::command]
 pub async fn list_worktrees(app: AppHandle, repo: String) -> CmdResult<Vec<Worktree>> {
     blocking(&app, move |_, s| {
-        ronin_git::list_worktrees(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::list_worktrees(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -1089,7 +1081,7 @@ pub async fn add_worktree(
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
         let result = ronin_git::add_worktree(
-            s.git()?,
+            &s.git()?,
             &session.path,
             &dest,
             &branch,
@@ -1111,7 +1103,7 @@ pub async fn remove_worktree(
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
-        let result = ronin_git::remove_worktree(s.git()?, &session.path, &path, force);
+        let result = ronin_git::remove_worktree(&s.git()?, &session.path, &path, force);
         s.refs_moved(&repo);
         result.map_err(err)
     })
@@ -1121,7 +1113,7 @@ pub async fn remove_worktree(
 #[tauri::command]
 pub async fn prune_worktrees(app: AppHandle, repo: String) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::prune_worktrees(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::prune_worktrees(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -1129,7 +1121,7 @@ pub async fn prune_worktrees(app: AppHandle, repo: String) -> CmdResult<()> {
 #[tauri::command]
 pub async fn lfs_status(app: AppHandle, repo: String) -> CmdResult<LfsStatus> {
     blocking(&app, move |_, s| {
-        ronin_git::lfs_status(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::lfs_status(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -1137,7 +1129,7 @@ pub async fn lfs_status(app: AppHandle, repo: String) -> CmdResult<LfsStatus> {
 #[tauri::command]
 pub async fn lfs_init(app: AppHandle, repo: String) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::lfs_init(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::lfs_init(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -1145,7 +1137,7 @@ pub async fn lfs_init(app: AppHandle, repo: String) -> CmdResult<()> {
 #[tauri::command]
 pub async fn lfs_track(app: AppHandle, repo: String, pattern: String) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::lfs_track(s.git()?, &s.session(&repo)?.path, &pattern).map_err(err)
+        ronin_git::lfs_track(&s.git()?, &s.session(&repo)?.path, &pattern).map_err(err)
     })
     .await
 }
@@ -1158,7 +1150,7 @@ pub async fn lfs_untrack(
     source: String,
 ) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::lfs_untrack(s.git()?, &s.session(&repo)?.path, &pattern, &source).map_err(err)
+        ronin_git::lfs_untrack(&s.git()?, &s.session(&repo)?.path, &pattern, &source).map_err(err)
     })
     .await
 }
@@ -1167,7 +1159,7 @@ pub async fn lfs_untrack(
 #[tauri::command]
 pub async fn lfs_locks(app: AppHandle, repo: String) -> CmdResult<Vec<LfsLock>> {
     blocking(&app, move |_, s| {
-        ronin_git::lfs_locks(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::lfs_locks(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -1175,7 +1167,7 @@ pub async fn lfs_locks(app: AppHandle, repo: String) -> CmdResult<Vec<LfsLock>> 
 #[tauri::command]
 pub async fn lfs_lock(app: AppHandle, repo: String, path: String) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::lfs_lock(s.git()?, &s.session(&repo)?.path, &path).map_err(err)
+        ronin_git::lfs_lock(&s.git()?, &s.session(&repo)?.path, &path).map_err(err)
     })
     .await
 }
@@ -1183,7 +1175,7 @@ pub async fn lfs_lock(app: AppHandle, repo: String, path: String) -> CmdResult<(
 #[tauri::command]
 pub async fn lfs_unlock(app: AppHandle, repo: String, id: String, force: bool) -> CmdResult<()> {
     blocking(&app, move |_, s| {
-        ronin_git::lfs_unlock(s.git()?, &s.session(&repo)?.path, &id, force).map_err(err)
+        ronin_git::lfs_unlock(&s.git()?, &s.session(&repo)?.path, &id, force).map_err(err)
     })
     .await
 }
@@ -1191,7 +1183,7 @@ pub async fn lfs_unlock(app: AppHandle, repo: String, id: String, force: bool) -
 #[tauri::command]
 pub async fn flow_config(app: AppHandle, repo: String) -> CmdResult<Option<FlowConfig>> {
     blocking(&app, move |_, s| {
-        ronin_git::flow_config(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::flow_config(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -1253,7 +1245,7 @@ fn flow_noun(kind: FlowKind) -> &'static str {
 #[tauri::command]
 pub async fn bisect_state(app: AppHandle, repo: String) -> CmdResult<Option<BisectState>> {
     blocking(&app, move |_, s| {
-        ronin_git::bisect_state(s.git()?, &s.session(&repo)?.path).map_err(err)
+        ronin_git::bisect_state(&s.git()?, &s.session(&repo)?.path).map_err(err)
     })
     .await
 }
@@ -1269,7 +1261,7 @@ pub async fn bisect_mark(
     blocking(&app, move |_, s| {
         let session = s.session(&repo)?;
         let _serialised = lock(&session.journal);
-        let result = ronin_git::bisect_mark(s.git()?, &session.path, mark, &rev);
+        let result = ronin_git::bisect_mark(&s.git()?, &session.path, mark, &rev);
         s.refs_moved(&repo);
         result.map_err(err)
     })

@@ -1,5 +1,6 @@
 import { FolderOpen, FolderPlus, Download } from "lucide-react";
 
+import { useShortcutLabel } from "../features/commands/useShortcuts";
 import { openDialog } from "../features/ops/dialogs";
 import { useConfig } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
@@ -8,6 +9,8 @@ import { Button } from "../ui/Button";
 export function EmptyState() {
   const { pickAndOpen, pickAndInit, open, opening } = useWorkspace();
   const recent = useConfig().data?.local.recentRepos ?? [];
+  const openKey = useShortcutLabel("repo.open");
+  const paletteKey = useShortcutLabel("palette.open");
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
@@ -27,7 +30,10 @@ export function EmptyState() {
           New repository…
         </Button>
       </div>
-      <p className="text-xs text-fg-faint">Ctrl+O opens a repository</p>
+      <p className="text-xs text-fg-faint">
+        {openKey && `${openKey} opens a repository · `}
+        {paletteKey && `${paletteKey} shows every command`}
+      </p>
 
       {recent.length > 0 && (
         <section className="mt-6 w-full max-w-md text-left">

@@ -27,9 +27,17 @@ export interface RepoView {
   search: Search | null;
   /** An interactive rebase being planned, onto `base` (the root when null). */
   rebase: { base: string | null } | null;
+  /** The terminal panel is open. */
+  terminal: boolean;
 }
 
-const empty: RepoView = { selected: null, openFile: null, search: null, rebase: null };
+const empty: RepoView = {
+  selected: null,
+  openFile: null,
+  search: null,
+  rebase: null,
+  terminal: false,
+};
 
 interface ViewState {
   views: Record<string, RepoView>;

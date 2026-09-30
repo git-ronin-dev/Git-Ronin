@@ -3,13 +3,19 @@
 
 mod askpass;
 mod commands;
+mod profile;
+mod settings;
+mod ssh;
 mod state;
+mod sync;
+mod terminal;
 mod watcher;
 
 use ronin_config::ConfigStore;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 
-use crate::state::AppState;
+use crate::profile::ProfileGit;
+use crate::state::{AppState, lock};
 
 fn main() {
     // Started by git or ssh to ask for a credential: answer and exit.
@@ -23,14 +29,43 @@ fn main() {
             let dir = app.path().app_config_dir()?;
             let (config, warnings) = ConfigStore::load(dir);
             let askpass = askpass::Askpass::start(app.handle().clone()).ok();
-            app.manage(AppState::new(config, warnings, askpass));
+            let profile = ProfileGit::new(app.path().home_dir()?);
+            app.manage(AppState::new(config, warnings, askpass, profile));
+            let state = app.state::<AppState>();
+            if let Some(warning) = state.apply_profile() {
+                lock(&state.config_warnings).push(warning);
+            }
+            state.sync.start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::git_version,
             commands::config_get,
             commands::config_take_warnings,
-            commands::config_set_ui,
+            settings::config_set_ui,
+            settings::config_set_git,
+            settings::config_set_keybindings,
+            settings::config_set_profiles,
+            settings::config_set_terminal_shell,
+            settings::profile_activate,
+            settings::git_identity,
+            settings::settings_export,
+            settings::settings_import_preview,
+            settings::settings_import,
+            settings::sync_status,
+            settings::sync_enable,
+            settings::sync_disable,
+            settings::sync_now,
+            settings::sync_resolve,
+            settings::ssh_keys,
+            settings::ssh_generate,
+            settings::workspaces_set,
+            settings::repo_summary,
+            settings::fetch_path,
+            settings::terminal_open,
+            settings::terminal_write,
+            settings::terminal_resize,
+            settings::terminal_close,
             commands::open_repo,
             commands::restore_tabs,
             commands::close_repo,
@@ -114,6 +149,11 @@ fn main() {
             commands::bisect_mark,
             commands::credential_respond,
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to start Git Ronin");
+        .build(tauri::generate_context!())
+        .expect("failed to start Git Ronin")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                app.state::<AppState>().sync.shutdown(app);
+            }
+        });
 }

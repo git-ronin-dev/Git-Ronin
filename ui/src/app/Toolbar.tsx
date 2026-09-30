@@ -9,25 +9,29 @@ import {
   PanelRight,
   Redo2,
   Search,
+  Settings,
+  SquareTerminal,
   Undo2,
   type LucideIcon,
 } from "lucide-react";
-import { forwardRef, useState, type ComponentProps } from "react";
+import { forwardRef, type ComponentProps } from "react";
 
 import type { PullMode } from "../bindings/PullMode";
 import { countChanges, useWorkingStatus } from "../features/changes/queries";
+import { useShortcutLabel } from "../features/commands/useShortcuts";
 import { PULL_LABELS, useGitActions } from "../features/ops/actions";
 import { openDialog } from "../features/ops/dialogs";
 import { useJournal } from "../features/ops/queries";
 import { useTask } from "../features/ops/tasks";
 import { describeHead } from "../features/repo/head";
 import { useStashActions } from "../features/stash/actions";
-import { StashDialog } from "../features/stash/StashDialog";
 import { useRefs, useRepoInfo } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
+import { updateView, useRepoView } from "../features/workspace/view";
 import { DropdownMenu } from "../ui/DropdownMenu";
 import { toast } from "../ui/toast-store";
 import { Tooltip } from "../ui/Tooltip";
+import { openSettings, useOverlays } from "./overlays";
 
 interface ToolbarProps {
   hasRepo: boolean;
@@ -43,7 +47,12 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
     // Three columns keep the action group centred.
     <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-surface px-2">
       <div className="flex items-center gap-1">
-        <ToolButton icon={PanelLeft} label="Toggle sidebar" onClick={onToggleSidebar} />
+        <ToolButton
+          icon={PanelLeft}
+          label="Toggle sidebar"
+          shortcut={useShortcutLabel("view.sidebar")}
+          onClick={onToggleSidebar}
+        />
       </div>
 
       <div className="flex items-center gap-1">
@@ -68,9 +77,20 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
         <ToolButton
           icon={Search}
           label="Search commits"
-          shortcut="Ctrl+F"
+          shortcut={useShortcutLabel("graph.search")}
           onClick={onSearch}
           disabled={!hasRepo}
+        />
+        {active ? (
+          <TerminalButton repo={active} />
+        ) : (
+          <ToolButton icon={SquareTerminal} label="Toggle terminal" disabled />
+        )}
+        <ToolButton
+          icon={Settings}
+          label="Settings"
+          shortcut={useShortcutLabel("settings.open")}
+          onClick={() => openSettings()}
         />
         <ToolButton icon={PanelRight} label="Toggle details" onClick={onToggleDetails} />
       </div>
@@ -78,8 +98,22 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
   );
 }
 
+function TerminalButton({ repo }: { repo: string }) {
+  const open = useRepoView(repo).terminal;
+  return (
+    <ToolButton
+      icon={SquareTerminal}
+      label={open ? "Hide terminal" : "Show terminal"}
+      shortcut={useShortcutLabel("terminal.toggle")}
+      onClick={() => updateView(repo, { terminal: !open })}
+    />
+  );
+}
+
 function RepoButtons({ repo }: { repo: string }) {
   const actions = useGitActions(repo);
+  const undoKey = useShortcutLabel("repo.undo");
+  const redoKey = useShortcutLabel("repo.redo");
   const journal = useJournal(repo).data;
   const info = useRepoInfo(repo).data;
   const refs = useRefs(repo).data;
@@ -108,7 +142,7 @@ function RepoButtons({ repo }: { repo: string }) {
         icon={Undo2}
         label="Undo"
         tooltip={stepTooltip("Undo")}
-        shortcut="Ctrl+Z"
+        shortcut={undoKey}
         // A blocked step stays clickable so it can say why.
         disabled={!journal?.undo}
         onClick={() =>
@@ -122,7 +156,7 @@ function RepoButtons({ repo }: { repo: string }) {
         icon={Redo2}
         label="Redo"
         tooltip={stepTooltip("Redo", journal?.redo)}
-        shortcut="Ctrl+Shift+Z"
+        shortcut={redoKey}
         disabled={!journal?.redo}
         onClick={() => void actions.undo(true)}
         showLabel
@@ -199,7 +233,6 @@ const MenuCaret = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
 );
 
 function StashButtons({ repo }: { repo: string }) {
-  const [open, setOpen] = useState(false);
   const changes = countChanges(useWorkingStatus(repo).data);
   const latest = useRefs(repo).data?.stashes[0];
   const actions = useStashActions(repo);
@@ -209,7 +242,7 @@ function StashButtons({ repo }: { repo: string }) {
         icon={Archive}
         label="Stash"
         disabled={changes === 0}
-        onClick={() => setOpen(true)}
+        onClick={() => useOverlays.setState({ stash: repo })}
         showLabel
       />
       <ToolButton
@@ -220,7 +253,6 @@ function StashButtons({ repo }: { repo: string }) {
         onClick={() => latest && void actions.apply(latest, true)}
         showLabel
       />
-      <StashDialog repo={repo} open={open} onOpenChange={setOpen} />
     </>
   );
 }
