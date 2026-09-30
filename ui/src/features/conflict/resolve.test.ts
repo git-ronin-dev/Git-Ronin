@@ -7,6 +7,7 @@ import {
   hasMarkers,
   lineEnding,
   pickAll,
+  sideTexts,
   togglePick,
   unresolvedCount,
   withLineEnding,
@@ -62,5 +63,16 @@ describe("conflict resolution", () => {
     expect(displayLines("a\r\nb\r\n")).toEqual(["a", "b"]);
     expect(displayLines("")).toEqual([]);
     expect(displayLines("x")).toEqual(["x"]);
+  });
+
+  it("rebuilds each side's file with where every chunk starts", () => {
+    const sides = sideTexts([
+      ...chunks,
+      { kind: "conflict", ours: "", base: "c\n", theirs: "d\ne\n" },
+    ]);
+    expect(sides.ours).toEqual({ lines: ["top", "mine", "middle", "a"], starts: [0, 1, 2, 3, 4] });
+    expect(sides.base).toEqual({ lines: ["top", "orig", "middle", "c"], starts: [0, 1, 2, 3, 3] });
+    expect(sides.theirs.lines).toEqual(["top", "yours", "middle", "b", "d", "e"]);
+    expect(sides.theirs.starts).toEqual([0, 1, 2, 3, 4]);
   });
 });

@@ -11,6 +11,8 @@ import { confirm } from "../../ui/confirm-store";
 import { toast } from "../../ui/toast-store";
 import { useWorkingStatus } from "../changes/queries";
 import { DiffHeader } from "../commit/DiffChrome";
+import type { Token } from "../commit/highlight";
+import { useLineHighlighter } from "../commit/useSyntax";
 import { useEscape } from "../commit/useEscape";
 import { invalidateWorktree } from "../workspace/queries";
 import { updateView } from "../workspace/view";
@@ -21,6 +23,7 @@ import {
   isConflict,
   lineEnding,
   pickAll,
+  sideTexts,
   togglePick,
   unresolvedCount,
   withLineEnding,
@@ -115,6 +118,18 @@ function TextMerge({
   const unresolved = unresolvedCount(chunks, picks);
   const conflicts = chunks.filter(isConflict).length;
   const dirty = custom !== null || Object.values(picks).some((p) => p.length > 0);
+  const sides = useMemo(() => sideTexts(chunks), [chunks]);
+  const highlight = useLineHighlighter(conflict.path);
+  // Each side highlighted as the whole file it is.
+  const tokens = useMemo(
+    () =>
+      highlight && {
+        ours: highlight(sides.ours.lines),
+        base: highlight(sides.base.lines),
+        theirs: highlight(sides.theirs.lines),
+      },
+    [highlight, sides],
+  );
 
   // Leaving asks first once there is merge work to lose.
   const leave = useCallback(async () => {
@@ -209,6 +224,7 @@ function TextMerge({
             <ChunkRow
               key={i}
               chunk={chunk}
+              at={(side) => ({ start: sides[side].starts[i]!, tokens: tokens?.[side] })}
               picked={picks[i] ?? []}
               showBase={showBase}
               locked={custom !== null}
@@ -274,14 +290,19 @@ function SideTitle({ side, label, present }: { side: Side; label: string; presen
 /** Unchanged runs longer than this are folded. */
 const FOLD = 8;
 
+/** Where a chunk is in one side's file, and that file's syntax tokens. */
+type At = (side: Side) => { start: number; tokens: Token[][] | undefined };
+
 function ChunkRow({
   chunk,
+  at,
   picked,
   showBase,
   locked,
   onPick,
 }: {
   chunk: MergeChunk;
+  at: At;
   picked: Side[];
   showBase: boolean;
   locked: boolean;
@@ -290,15 +311,15 @@ function ChunkRow({
   const [open, setOpen] = useState(false);
   const cols = showBase ? "grid-cols-3" : "grid-cols-2";
   if (!isConflict(chunk)) {
-    const lines = displayLines(chunk.text);
+    const lines = displayLines(chunk.text).map((text, k) => ({ text, k }));
     const folded = !open && lines.length > FOLD;
     const shown = folded ? [...lines.slice(0, 3), null, ...lines.slice(-3)] : lines;
-    const column = (
+    const column = (side: Side) => (
       <div className="min-w-0 border-l border-line text-fg-muted first:border-l-0">
-        {shown.map((line, k) =>
+        {shown.map((line, i) =>
           line === null ? (
             <button
-              key={k}
+              key={i}
               type="button"
               onClick={() => setOpen(true)}
               className="block w-full bg-raised/60 px-3 text-left font-sans text-fg-faint select-none hover:text-fg"
@@ -306,16 +327,16 @@ function ChunkRow({
               ⋯ {lines.length - 6} unchanged lines
             </button>
           ) : (
-            <Line key={k} text={line} />
+            <Line key={i} text={line.text} n={at(side).start + line.k} tokens={at(side).tokens} />
           ),
         )}
       </div>
     );
     return (
       <div className={clsx("grid", cols)}>
-        {column}
-        {showBase && column}
-        {column}
+        {column("ours")}
+        {showBase && column("base")}
+        {column("theirs")}
       </div>
     );
   }
@@ -352,7 +373,7 @@ function ChunkRow({
               {lines.length === 0 && <span className="text-fg-faint">(nothing)</span>}
             </label>
             {lines.map((line, k) => (
-              <Line key={k} text={line} />
+              <Line key={k} text={line} n={at(side).start + k} tokens={at(side).tokens} />
             ))}
           </div>
         );
@@ -361,8 +382,27 @@ function ChunkRow({
   );
 }
 
-function Line({ text }: { text: string }) {
-  return <div className="min-h-5 px-3 break-all whitespace-pre-wrap">{text}</div>;
+/** Line `n` (0-based) of a side, highlighted when its tokens are known. */
+function Line({ text, n, tokens }: { text: string; n: number; tokens: Token[][] | undefined }) {
+  const line = tokens?.[n];
+  return (
+    <div className="flex min-h-5">
+      <span className="w-10 shrink-0 pr-2 text-right text-fg-faint select-none">{n + 1}</span>
+      <span className="min-w-0 flex-1 pr-3 break-all whitespace-pre-wrap">
+        {line
+          ? line.map((t, i) =>
+              t.className ? (
+                <span key={i} className={t.className}>
+                  {t.text}
+                </span>
+              ) : (
+                t.text
+              ),
+            )
+          : text}
+      </span>
+    </div>
+  );
 }
 
 /** Binary, submodule and delete/modify conflicts: one side or the other. */

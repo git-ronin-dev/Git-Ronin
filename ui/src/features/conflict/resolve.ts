@@ -96,3 +96,30 @@ export function displayLines(text: string): string[] {
   if (lines.at(-1) === "") lines.pop();
   return lines.map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l));
 }
+
+/** One side's whole file as display lines, and the line each chunk starts at. */
+export interface SideText {
+  lines: string[];
+  /** Index into `lines` of each chunk's first line. */
+  starts: number[];
+}
+
+/**
+ * Each side's file rebuilt from the chunks (resolved text belongs to every
+ * side), for line numbers and for highlighting each side as a whole.
+ */
+export function sideTexts(chunks: MergeChunk[]): Record<Side, SideText> {
+  const sides: Record<Side, SideText> = {
+    ours: { lines: [], starts: [] },
+    base: { lines: [], starts: [] },
+    theirs: { lines: [], starts: [] },
+  };
+  for (const chunk of chunks) {
+    for (const side of ["ours", "base", "theirs"] as const) {
+      const s = sides[side];
+      s.starts.push(s.lines.length);
+      s.lines.push(...displayLines(isConflict(chunk) ? chunk[side] : chunk.text));
+    }
+  }
+  return sides;
+}
