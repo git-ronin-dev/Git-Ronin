@@ -73,6 +73,8 @@ pub enum RefKind {
     Local,
     Remote,
     Tag,
+    /// A stash entry; `name` is `stash@{n}`, `full_name` is `refs/stash`.
+    Stash,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -225,6 +227,10 @@ pub struct Graph {
     labels: HashMap<ObjectId, Vec<RefLabel>>,
     rows: Vec<GraphRow>,
     row_of: HashMap<ObjectId, u32>,
+    /// Stash commits and the commit each was made on, their only parent here.
+    stashes: HashMap<ObjectId, ObjectId>,
+    /// The index and untracked-files commits of stashes: never shown.
+    stash_parts: HashSet<ObjectId>,
 }
 
 impl Graph {
@@ -273,6 +279,25 @@ impl Graph {
             add(&t.oid, label(&t.name, &t.full_name, RefKind::Tag, false))?;
         }
 
+        // A stash is drawn as a commit on the one it was made on. Its other
+        // parents (the index, and untracked files) are git's bookkeeping.
+        let mut stashes = HashMap::new();
+        let mut stash_parts = HashSet::new();
+        if filter.includes("refs/stash") {
+            for s in &refs.stashes {
+                let id = ObjectId::from_hex(s.oid.as_bytes()).map_err(gix_err)?;
+                let Ok(commit) = repo.find_commit(id) else {
+                    continue;
+                };
+                let mut parents = commit.parent_ids().map(|p| p.detach());
+                let Some(base) = parents.next() else { continue };
+                stash_parts.extend(parents);
+                stashes.insert(id, base);
+                let name = format!("stash@{{{}}}", s.index);
+                add(&s.oid, label(&name, "refs/stash", RefKind::Stash, false))?;
+            }
+        }
+
         // Tags may point at trees or blobs; only commits start a walk.
         let mut seen = HashSet::new();
         tips.retain(|id| seen.insert(*id) && repo.find_commit(*id).is_ok());
@@ -299,6 +324,8 @@ impl Graph {
             labels,
             rows: Vec::new(),
             row_of: HashMap::new(),
+            stashes,
+            stash_parts,
         })
     }
 
@@ -388,7 +415,13 @@ impl Graph {
                 None => self.walk = None,
                 Some(info) => {
                     let info = info?;
-                    let row = self.make_row(info.id, &info.parent_ids)?;
+                    if self.stash_parts.contains(&info.id) {
+                        continue;
+                    }
+                    let row = match self.stashes.get(&info.id) {
+                        Some(&base) => self.make_row(info.id, &[base])?,
+                        None => self.make_row(info.id, &info.parent_ids)?,
+                    };
                     self.row_of.insert(info.id, self.rows.len() as u32);
                     self.rows.push(row);
                 }

@@ -14,9 +14,12 @@ import { countChanges, useWorkingStatus } from "../changes/queries";
 import { shortRev, useGitActions, type GitActions } from "../ops/actions";
 import { dropProps, useDrag } from "../ops/drag";
 import { commitMenu, type RepoContext } from "../ops/menus";
-import { useRepoContext } from "../ops/queries";
+import { useBisect, useRepoContext } from "../ops/queries";
+import { useStashActions } from "../stash/actions";
 import { keys, useRepoInfo, useSetUiPrefs, useUiPrefs } from "../workspace/queries";
 import { WORKING_COPY, updateView, useRepoView, type Search } from "../workspace/view";
+import { bisectLabels, type BisectLabel } from "./bisect";
+import { rowStash } from "./chips";
 import { LANE_WIDTH, ROW_HEIGHT } from "./geometry";
 import { GraphLanes } from "./GraphLanes";
 import { RefChips } from "./RefChips";
@@ -45,6 +48,8 @@ export function GraphView({ repo }: { repo: string }) {
   const info = useRepoInfo(repo).data;
   const ctx = useRepoContext(repo);
   const actions = useGitActions(repo);
+  const bisect = useBisect(repo, info?.operation === "bisect").data;
+  const marks = useMemo(() => bisectLabels(bisect), [bisect]);
   const status = useWorkingStatus(repo, info !== undefined && !info.isBare);
   const changes = countChanges(status.data);
   // The uncommitted-changes row sits above the first commit.
@@ -225,6 +230,7 @@ export function GraphView({ repo }: { repo: string }) {
                       row={row}
                       graphWidth={graphWidth}
                       selected={row.oid === view.selected}
+                      mark={marks.get(row.oid)}
                       dimmed={dimming && !matchSet.has(item.index)}
                       showAvatars={showAvatars}
                       onSelect={select}
@@ -262,6 +268,8 @@ interface RowProps {
   row: GraphRow;
   graphWidth: number;
   selected: boolean;
+  /** What a running bisect said about the commit. */
+  mark: BisectLabel | undefined;
   dimmed: boolean;
   showAvatars: boolean;
   onSelect: (oid: string) => void;
@@ -273,6 +281,7 @@ const Row = memo(function Row({
   row,
   graphWidth,
   selected,
+  mark,
   dimmed,
   showAvatars,
   onSelect,
@@ -280,10 +289,18 @@ const Row = memo(function Row({
   actions,
 }: RowProps) {
   const over = useDrag((s) => s.over !== null && s.over === row.oid);
+  const stash = rowStash(row);
+  const stashActions = useStashActions(ctx.repo);
   return (
     <ContextMenu
       items={[
-        ...commitMenu(actions, ctx, row.oid),
+        ...(stash
+          ? [
+              { label: "Apply stash", onSelect: () => void stashActions.apply(stash, false) },
+              { label: "Pop stash", onSelect: () => void stashActions.apply(stash, true) },
+              { label: "Delete stash…", onSelect: () => void stashActions.drop(stash) },
+            ]
+          : commitMenu(actions, ctx, row.oid)),
         "separator",
         { label: "Copy commit SHA", onSelect: () => void copyText(row.oid, "Copied commit SHA") },
         { label: "Copy message", onSelect: () => void copyText(row.summary, "Copied message") },
@@ -302,9 +319,10 @@ const Row = memo(function Row({
         )}
       >
         <div style={{ width: graphWidth }} className="h-full shrink-0 overflow-hidden">
-          <GraphLanes row={row} width={graphWidth} />
+          <GraphLanes row={row} width={graphWidth} stash={stash !== null} />
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
+          {mark && <BisectChip mark={mark} />}
           <RefChips refs={row.refs} lane={row.lane} oid={row.oid} ctx={ctx} actions={actions} />
           <span className="truncate">{row.summary}</span>
         </div>
@@ -325,6 +343,27 @@ const Row = memo(function Row({
     </ContextMenu>
   );
 });
+
+const markStyles: Record<BisectLabel["kind"], string> = {
+  bad: "border-danger text-danger",
+  good: "border-success text-success",
+  skipped: "border-line text-fg-faint",
+  found: "border-danger bg-danger text-accent-fg font-semibold",
+};
+
+function BisectChip({ mark }: { mark: BisectLabel }) {
+  return (
+    <span
+      title="Marked during the bisect"
+      className={clsx(
+        "flex h-5 shrink-0 items-center rounded-sm border px-1.5 text-xs",
+        markStyles[mark.kind],
+      )}
+    >
+      {mark.label}
+    </span>
+  );
+}
 
 function Placeholder({ graphWidth }: { graphWidth: number }) {
   return (

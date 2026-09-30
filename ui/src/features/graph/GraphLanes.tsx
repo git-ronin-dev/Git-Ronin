@@ -17,9 +17,12 @@ const RING = 4.6;
 export const GraphLanes = memo(function GraphLanes({
   row,
   width,
+  stash = false,
 }: {
   row: GraphRow;
   width: number;
+  /** A stash: drawn as a box, set on the commit it was made on. */
+  stash?: boolean;
 }) {
   const mask = useId();
   const isMerge = row.parents.length > 1;
@@ -47,15 +50,31 @@ export const GraphLanes = memo(function GraphLanes({
           <path key={i} d={edgePath(edge)} stroke={edgeColor(edge)} strokeWidth={2} />
         ))}
       </g>
-      {/* Commits are ensō; a merge is left empty inside. */}
-      <path
-        d={ensoPath(cx, MID, RING, 45)}
-        stroke={color}
-        strokeWidth={2.2}
-        strokeLinecap="round"
-        fill="none"
-      />
-      {!isMerge && <circle cx={cx} cy={MID} r={2} fill={color} />}
+      {stash ? (
+        <rect
+          x={cx - RING + 0.5}
+          y={MID - RING + 0.5}
+          width={2 * RING - 1}
+          height={2 * RING - 1}
+          rx={1.5}
+          stroke={color}
+          strokeWidth={1.8}
+          strokeDasharray="2.5 1.5"
+          fill="none"
+        />
+      ) : (
+        <>
+          {/* Commits are ensō; a merge is left empty inside. */}
+          <path
+            d={ensoPath(cx, MID, RING, 45)}
+            stroke={color}
+            strokeWidth={2.2}
+            strokeLinecap="round"
+            fill="none"
+          />
+          {!isMerge && <circle cx={cx} cy={MID} r={2} fill={color} />}
+        </>
+      )}
     </svg>
   );
 });

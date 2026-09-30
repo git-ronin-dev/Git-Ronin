@@ -275,3 +275,40 @@ fn locate_loads_history_until_found() {
     let absent = "0123456789012345678901234567890123456789";
     assert_eq!(graph.locate(absent).unwrap(), None);
 }
+
+#[test]
+fn stashes_sit_on_their_base_without_git_bookkeeping() {
+    let repo = TestRepo::new();
+    repo.commit_file("a.txt", "a", "a");
+    let base = repo.commit_file("a.txt", "b", "b");
+    repo.write("a.txt", "changed");
+    repo.git(&["add", "a.txt"]);
+    repo.write("new.txt", "untracked");
+    repo.git(&["stash", "push", "-q", "--include-untracked", "-m", "work"]);
+    let stash = repo.git(&["rev-parse", "refs/stash"]).trim().to_owned();
+
+    let rows = all_rows(&repo, &GraphFilter::default());
+    // Neither "index on main" nor "untracked files on main".
+    assert_eq!(summaries(&rows), ["On main: work", "b", "a"]);
+    assert_eq!(rows[0].oid, stash);
+    assert_eq!(rows[0].parents, [base]);
+    let label = &rows[0].refs[0];
+    assert_eq!(
+        (label.name.as_str(), label.full_name.as_str(), label.kind),
+        ("stash@{0}", "refs/stash", RefKind::Stash)
+    );
+    // No lane is left open for the parents that aren't shown.
+    let last = rows.last().unwrap();
+    assert!(
+        !last
+            .edges
+            .iter()
+            .any(|e| e.kind == EdgeKind::Out || e.kind == EdgeKind::Pass)
+    );
+
+    let hidden = GraphFilter {
+        hidden: vec!["refs/stash".into()],
+        ..Default::default()
+    };
+    assert_eq!(summaries(&all_rows(&repo, &hidden)), ["b", "a"]);
+}

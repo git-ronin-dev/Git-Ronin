@@ -2,7 +2,7 @@ import { clsx } from "clsx";
 
 import type { RefLabel } from "../../bindings/RefLabel";
 import { laneColor } from "../../ui/colors";
-import { Cloud, Laptop, Tag } from "../../ui/icons";
+import { Archive, Cloud, Laptop, Tag } from "../../ui/icons";
 import { Tooltip } from "../../ui/Tooltip";
 import type { GitActions } from "../ops/actions";
 import { beginDrag, dropProps, useDrag } from "../ops/drag";
@@ -71,6 +71,7 @@ function ChipLabel({
       )}
     >
       {chip.tag && <Tag className="size-3 shrink-0" />}
+      {chip.stash && <Archive className="size-3 shrink-0" />}
       <span className="truncate">{chip.text}</span>
       {chip.local && <Laptop className="size-3 shrink-0" aria-label="local" />}
       {chip.remote && <Cloud className="size-3 shrink-0" aria-label="remote" />}
