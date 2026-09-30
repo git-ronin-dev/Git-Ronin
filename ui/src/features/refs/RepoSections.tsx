@@ -1,4 +1,12 @@
 import { clsx } from "clsx";
+
+import type { FlowConfig } from "../../bindings/FlowConfig";
+import type { FlowKind } from "../../bindings/FlowKind";
+import type { Submodule } from "../../bindings/Submodule";
+import type { SubmoduleState } from "../../bindings/SubmoduleState";
+import { copyText } from "../../lib/clipboard";
+import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
+import { DropdownMenu } from "../../ui/DropdownMenu";
 import {
   Boxes,
   FolderGit2,
@@ -8,15 +16,7 @@ import {
   Plus,
   RefreshCw,
   Workflow,
-} from "lucide-react";
-
-import type { FlowConfig } from "../../bindings/FlowConfig";
-import type { FlowKind } from "../../bindings/FlowKind";
-import type { Submodule } from "../../bindings/Submodule";
-import type { SubmoduleState } from "../../bindings/SubmoduleState";
-import { copyText } from "../../lib/clipboard";
-import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
-import { DropdownMenu } from "../../ui/DropdownMenu";
+} from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { Tooltip } from "../../ui/Tooltip";
 import { revealCommit } from "../graph/reveal";

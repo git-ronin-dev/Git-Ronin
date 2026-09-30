@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { ArrowLeft, ExternalLink, GitPullRequest, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import type { MergeMethod } from "../../bindings/MergeMethod";
@@ -14,6 +13,7 @@ import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { confirm } from "../../ui/confirm-store";
 import { DropdownMenu } from "../../ui/DropdownMenu";
+import { ArrowLeft, ExternalLink, GitPullRequest, RefreshCw } from "../../ui/icons";
 import { toast } from "../../ui/toast-store";
 import { FileList } from "../commit/FileList";
 import { useEscape } from "../commit/useEscape";

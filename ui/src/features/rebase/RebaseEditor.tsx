@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { ArrowDown, ArrowLeft, ArrowUp, CornerLeftDown, GripVertical } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import type { RebaseAction } from "../../bindings/RebaseAction";
@@ -9,6 +8,7 @@ import { ipc } from "../../lib/ipc";
 import { formatDate, relativeTime } from "../../lib/time";
 import { Button } from "../../ui/Button";
 import { confirm } from "../../ui/confirm-store";
+import { ArrowDown, ArrowLeft, ArrowUp, CornerLeftDown, GripVertical } from "../../ui/icons";
 import { useEscape } from "../commit/useEscape";
 import { shortRev, useGitActions } from "../ops/actions";
 import { describeHead } from "../repo/head";

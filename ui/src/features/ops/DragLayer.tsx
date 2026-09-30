@@ -1,6 +1,5 @@
-import { GitBranch } from "lucide-react";
-
 import { PointMenu } from "../../ui/DropdownMenu";
+import { GitBranch } from "../../ui/icons";
 import { useRepoInfo } from "../workspace/queries";
 import { useGitActions } from "./actions";
 import { dropActions, useDrag } from "./drag";

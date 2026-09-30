@@ -14,4 +14,8 @@ fileTree: boolean,
 /**
  * Width of the graph column in pixels; 0 sizes it to the lanes.
  */
-graphWidth: number, terminalFontSize: number, };
+graphWidth: number, terminalFontSize: number, 
+/**
+ * Short sounds when an action succeeds or fails. Off by default.
+ */
+sounds: boolean, };

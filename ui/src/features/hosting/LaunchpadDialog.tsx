@@ -1,6 +1,5 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { CircleDot, GitPullRequest, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 import { openSettings, useOverlays } from "../../app/overlays";
@@ -15,6 +14,8 @@ import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { Dialog } from "../../ui/Dialog";
+import { EmptyNote } from "../../ui/EmptyNote";
+import { CircleDot, GitPullRequest, RefreshCw } from "../../ui/icons";
 import { useUiPrefs } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";
 import { updateView } from "../workspace/view";
@@ -140,7 +141,9 @@ function Launchpad() {
           <p className="p-6 text-center text-fg-faint">Loading…</p>
         ) : tab === "prs" ? (
           prs.length === 0 ? (
-            <p className="p-6 text-center text-fg-faint">Nothing waiting for you.</p>
+            <EmptyNote title="Nothing waiting for you">
+              Pull requests you wrote, review or are assigned to show up here.
+            </EmptyNote>
           ) : (
             <ul>
               {prs.map((p) => (
@@ -149,7 +152,7 @@ function Launchpad() {
             </ul>
           )
         ) : issues.length === 0 ? (
-          <p className="p-6 text-center text-fg-faint">No open issues assigned to you.</p>
+          <EmptyNote title="No open issues assigned to you" />
         ) : (
           <ul>
             {issues.map((i) => (

@@ -19,6 +19,10 @@ vi.mock("../lib/ipc", () => ({
     workingStatus: vi.fn(),
     journalState: vi.fn(),
     pendingMessage: vi.fn(),
+    gitIdentity: vi.fn(),
+    hostingAccounts: vi.fn(),
+    stageFiles: vi.fn(),
+    commit: vi.fn(),
   },
 }));
 
@@ -49,6 +53,8 @@ describe("AppShell", () => {
     vi.mocked(ipc.workingStatus).mockResolvedValue({ staged: [], unstaged: [], conflicted: [] });
     vi.mocked(ipc.journalState).mockResolvedValue({ undo: null, redo: null });
     vi.mocked(ipc.pendingMessage).mockResolvedValue(null);
+    vi.mocked(ipc.gitIdentity).mockResolvedValue({ name: null, email: null, signingKey: null });
+    vi.mocked(ipc.hostingAccounts).mockResolvedValue([]);
     useWorkspace.setState({ tabs: [], active: null });
   });
 
@@ -57,6 +63,19 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: /open repository…/i })).toBeInTheDocument();
     expect(await screen.findByText("/work/ronin")).toBeInTheDocument();
     expect(await screen.findByText("git 2.55.0")).toBeInTheDocument();
+  });
+
+  it("offers first steps until a repository has been opened", async () => {
+    vi.mocked(ipc.configGet).mockResolvedValue({
+      ...config,
+      local: { ...config.local, recentRepos: [] },
+    });
+    renderShell();
+    const steps = await screen.findByRole("region", { name: "First steps" });
+    expect(
+      await within(steps).findByText("Git has no name or email for your commits yet."),
+    ).toBeInTheDocument();
+    expect(within(steps).getByRole("button", { name: "Accounts" })).toBeInTheDocument();
   });
 
   it("shows tabs, refs and the commit graph of the open repository", async () => {
@@ -101,7 +120,14 @@ describe("AppShell", () => {
     expect(within(unstaged).getByText("lib.rs")).toBeInTheDocument();
     expect(within(unstaged).getByText("notes.md")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Staged" })).toHaveTextContent("None");
-    expect(screen.getByRole("button", { name: "Stage changes to commit" })).toBeDisabled();
+    // Nothing staged: the composer offers to commit everything.
+    expect(screen.getByRole("button", { name: "Write a summary" })).toBeDisabled();
+    vi.mocked(ipc.stageFiles).mockResolvedValue();
+    vi.mocked(ipc.commit).mockResolvedValue({ oid: "c", output: "" });
+    fireEvent.change(screen.getByLabelText("Commit summary"), { target: { value: "Save" } });
+    fireEvent.click(screen.getByRole("button", { name: "Stage all and commit 2 files" }));
+    await vi.waitFor(() => expect(ipc.commit).toHaveBeenCalled());
+    expect(ipc.stageFiles).toHaveBeenCalledWith("/work/ronin", ["src/lib.rs", "notes.md"]);
   });
 
   it("shows a stopped merge and what undo would do", async () => {

@@ -1,9 +1,9 @@
 import { clsx } from "clsx";
-import { CircleCheck, CircleDashed, CircleMinus, CircleX } from "lucide-react";
 
 import type { CheckState } from "../../bindings/CheckState";
 import type { CiStatus } from "../../bindings/CiStatus";
 import { openUrl } from "../../lib/open";
+import { CircleCheck, CircleDashed, CircleMinus, CircleX } from "../../ui/icons";
 
 const STATES: Record<CheckState, { icon: typeof CircleCheck; className: string; label: string }> = {
   success: { icon: CircleCheck, className: "text-success", label: "passed" },

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { StatusEntry } from "../../bindings/StatusEntry";
 import { Button } from "../../ui/Button";
+import { EmptyNote } from "../../ui/EmptyNote";
 import { FileLayoutToggle } from "../commit/FileTreeParts";
 import { updateView, useRepoView } from "../workspace/view";
 import { ChangeList, type Side } from "./ChangeList";
@@ -111,10 +112,16 @@ export function ChangesPanel({ repo }: { repo: string }) {
             {list("staged", s.staged)}
           </Group>
         )}
+        {s && total === 0 && (
+          <EmptyNote title="Working tree clean">
+            Changes to files in the repository show up here, ready to stage.
+          </EmptyNote>
+        )}
       </div>
       <CommitComposer
         repo={repo}
         stagedCount={s?.staged.length ?? 0}
+        unstaged={s?.unstaged.map((e) => e.path) ?? []}
         conflicts={s?.conflicted.length ?? 0}
       />
     </div>

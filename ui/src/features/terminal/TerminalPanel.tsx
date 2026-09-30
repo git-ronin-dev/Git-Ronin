@@ -1,9 +1,9 @@
 import "@xterm/xterm/css/xterm.css";
 
 import { clsx } from "clsx";
-import { ChevronDown, ChevronUp, Plus, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { ChevronDown, ChevronUp, Plus, Search, X } from "../../ui/icons";
 import { Tooltip } from "../../ui/Tooltip";
 import { useUiPrefs } from "../workspace/queries";
 import { updateView } from "../workspace/view";

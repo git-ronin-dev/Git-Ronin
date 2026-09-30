@@ -1,5 +1,4 @@
-import { ArrowDownCircle, LoaderCircle } from "lucide-react";
-
+import { ArrowDownCircle, LoaderCircle } from "../../ui/icons";
 import { installUpdate, useUpdates } from "./store";
 
 /** Status bar item: a new version to install, or its download. */

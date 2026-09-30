@@ -1,7 +1,7 @@
 import { clsx } from "clsx";
-import { ChevronRight, Folder, List, ListTree } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { ChevronRight, Folder, List, ListTree } from "../../ui/icons";
 import { Tooltip } from "../../ui/Tooltip";
 import { useSetUiPrefs, useUiPrefs } from "../workspace/queries";
 import { indent, type TreeRow } from "./fileTree";

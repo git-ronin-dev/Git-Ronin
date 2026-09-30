@@ -1,7 +1,8 @@
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { clsx } from "clsx";
-import { X } from "lucide-react";
 import type { ReactNode } from "react";
+
+import { X } from "./icons";
 
 interface DialogProps {
   open: boolean;
@@ -25,7 +26,7 @@ export function Dialog({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 bg-canvas/70" />
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-rn-fade bg-canvas/70" />
         <RadixDialog.Content
           // A large dialog has no single description.
           {...(large && { "aria-describedby": undefined })}
@@ -43,7 +44,7 @@ export function Dialog({
             }
           }}
           className={clsx(
-            "fixed top-1/2 left-1/2 z-50 -translate-1/2 rounded-lg border border-line bg-surface p-5 shadow-2xl outline-none",
+            "fixed top-1/2 left-1/2 z-50 -translate-1/2 animate-rn-rise rounded-lg border border-line bg-surface p-5 shadow-2xl outline-none",
             large ? "flex h-[min(640px,90vh)] w-[min(900px,94vw)] flex-col" : "w-[min(480px,90vw)]",
           )}
         >

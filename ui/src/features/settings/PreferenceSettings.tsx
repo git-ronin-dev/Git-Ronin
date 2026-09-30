@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { Theme } from "../../bindings/Theme";
 import type { UiPrefs } from "../../bindings/UiPrefs";
+import { play, setSoundsEnabled } from "../../lib/sound";
 import { Button } from "../../ui/Button";
 import { Checkbox, Field, Select, TextInput } from "../../ui/Field";
 import { checkForUpdates, installUpdate, useUpdates } from "../updates/store";
@@ -39,6 +40,20 @@ export function GeneralSettings() {
         <p className="pl-6 text-xs text-fg-faint">
           Pictures come from Gravatar, which is sent a hash of each author's email address.
           Otherwise authors show as initials.
+        </p>
+      </div>
+      <div className="space-y-1">
+        <Checkbox
+          label="Play sounds"
+          checked={prefs.sounds}
+          onChange={(sounds) => {
+            set({ sounds });
+            setSoundsEnabled(sounds);
+            if (sounds) play("success");
+          }}
+        />
+        <p className="pl-6 text-xs text-fg-faint">
+          A short knock when an action finishes, a lower one when it fails.
         </p>
       </div>
       <Field label="Graph column" hint="Or drag the edge of the graph's column header.">

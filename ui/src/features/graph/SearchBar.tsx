@@ -1,7 +1,7 @@
 import { clsx } from "clsx";
-import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { ChevronDown, ChevronUp, Search, X } from "../../ui/icons";
 import type { Search as SearchState } from "../workspace/view";
 
 interface SearchBarProps {

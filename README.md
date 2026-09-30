@@ -1,3 +1,5 @@
+<p align="center"><img src="src-tauri/icons/128x128@2x.png" alt="Git Ronin logo" width="160"></p>
+
 # Git Ronin
 
 A free, cross-platform Git GUI. Linux first; Windows and macOS from the same code.

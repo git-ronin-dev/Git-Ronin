@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { GitBranch, LoaderCircle, TriangleAlert } from "lucide-react";
 
 import { useTask } from "../features/ops/tasks";
 import { UpdateStatus } from "../features/updates/UpdateStatus";
@@ -7,6 +6,7 @@ import { describeHead } from "../features/repo/head";
 import { useRefs, useRepoInfo } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
 import { ipc } from "../lib/ipc";
+import { GitBranch, LoaderCircle, TriangleAlert } from "../ui/icons";
 
 export function StatusBar() {
   const active = useWorkspace((s) => s.active);

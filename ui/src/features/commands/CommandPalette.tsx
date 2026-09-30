@@ -1,10 +1,10 @@
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { Search } from "lucide-react";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { useOverlays } from "../../app/overlays";
+import { Search } from "../../ui/icons";
 import { useWorkspace } from "../workspace/store";
 import { COMMANDS, dynamicCommands, type Command } from "./commands";
 import { fuzzyFilter } from "./fuzzy";
@@ -111,10 +111,12 @@ function Palette() {
               onClick={() => run(command)}
               className={clsx(
                 "flex h-8 cursor-default items-center gap-2 rounded-md px-2",
-                i === selected && "bg-accent text-accent-fg",
+                i === selected && "bg-hover shadow-[inset_2px_0_0_var(--rn-accent)]",
               )}
             >
-              <span className={clsx("shrink-0", i === selected ? "opacity-80" : "text-fg-faint")}>
+              <span
+                className={clsx("shrink-0", i === selected ? "text-fg-muted" : "text-fg-faint")}
+              >
                 {command.category}:
               </span>
               <span className="min-w-0 flex-1 truncate">{command.title}</span>
@@ -122,7 +124,7 @@ function Palette() {
                 <kbd
                   className={clsx(
                     "shrink-0 font-sans text-xs",
-                    i === selected ? "opacity-80" : "text-fg-faint",
+                    i === selected ? "text-fg-muted" : "text-fg-faint",
                   )}
                 >
                   {formatShortcut(shortcut)}

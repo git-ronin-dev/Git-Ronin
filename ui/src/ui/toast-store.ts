@@ -1,6 +1,13 @@
 import { create } from "zustand";
 
+import { play } from "../lib/sound";
+
 export type ToastKind = "info" | "success" | "error";
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
 
 export interface ToastItem {
   id: number;
@@ -9,6 +16,8 @@ export interface ToastItem {
   description?: string;
   /** Stays until dismissed, like errors. */
   persist?: boolean;
+  /** A button that runs something and dismisses the toast. */
+  action?: ToastAction;
 }
 
 interface ToastState {
@@ -21,14 +30,17 @@ let nextId = 0;
 
 export const useToasts = create<ToastState>()((set) => ({
   items: [],
-  push: (item) => set((s) => ({ items: [...s.items, { ...item, id: nextId++ }] })),
+  push: (item) => {
+    if (item.kind !== "info") play(item.kind);
+    set((s) => ({ items: [...s.items, { ...item, id: nextId++ }] }));
+  },
   dismiss: (id) => set((s) => ({ items: s.items.filter((t) => t.id !== id) })),
 }));
 
 const show =
   (kind: ToastKind, persist = false) =>
-  (title: string, description?: string) =>
-    useToasts.getState().push({ kind, title, description, persist });
+  (title: string, description?: string, action?: ToastAction) =>
+    useToasts.getState().push({ kind, title, description, persist, action });
 
 export const toast = {
   info: show("info"),

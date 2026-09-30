@@ -1,9 +1,9 @@
-import { Copy } from "lucide-react";
-
 import type { Signature } from "../../bindings/Signature";
 import { copyText } from "../../lib/clipboard";
 import { formatDate, relativeTime } from "../../lib/time";
 import { Avatar } from "../../ui/Avatar";
+import { EmptyNote } from "../../ui/EmptyNote";
+import { Copy } from "../../ui/icons";
 import { revealCommit } from "../graph/reveal";
 import { CommitChecks } from "../hosting/CommitChecks";
 import { useUiPrefs } from "../workspace/queries";
@@ -17,7 +17,14 @@ export function CommitPanel({ repo }: { repo: string }) {
   const detail = useCommitDetail(repo, selected);
   const showAvatars = useUiPrefs()?.showAvatars ?? false;
 
-  if (!selected) return <Hint>Select a commit to see its details.</Hint>;
+  if (!selected)
+    return (
+      <div className="flex h-full items-center justify-center">
+        <EmptyNote title="No commit selected">
+          Pick a commit in the graph to see its message, author and files.
+        </EmptyNote>
+      </div>
+    );
   if (detail.isError) return <Hint>{String(detail.error)}</Hint>;
   if (!detail.data) return <Hint>Loading…</Hint>;
 

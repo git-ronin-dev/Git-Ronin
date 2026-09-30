@@ -1,5 +1,4 @@
 import { clsx } from "clsx";
-import { Plus, UserRound, X } from "lucide-react";
 import { forwardRef, type ComponentProps } from "react";
 
 import { activeProfileId } from "../features/commands/commands";
@@ -7,6 +6,7 @@ import { openDialog } from "../features/ops/dialogs";
 import { useConfig } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
 import { DropdownMenu } from "../ui/DropdownMenu";
+import { Plus, UserRound, X } from "../ui/icons";
 import { openSettings, useOverlays } from "./overlays";
 
 export function RepoTabs() {

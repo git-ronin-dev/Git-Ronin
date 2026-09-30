@@ -1,5 +1,4 @@
 import { clsx } from "clsx";
-import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import type { Profile } from "../../bindings/Profile";
@@ -7,6 +6,7 @@ import type { SigningFormat } from "../../bindings/SigningFormat";
 import { Button } from "../../ui/Button";
 import { confirm } from "../../ui/confirm-store";
 import { Checkbox, Field, Select, TextInput } from "../../ui/Field";
+import { Plus } from "../../ui/icons";
 import { activeProfileId } from "../commands/commands";
 import { useConfig } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";

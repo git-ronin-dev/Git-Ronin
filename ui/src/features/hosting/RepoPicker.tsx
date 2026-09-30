@@ -1,9 +1,9 @@
 import { clsx } from "clsx";
-import { Lock } from "lucide-react";
 import { useState } from "react";
 
 import type { HostedRepo } from "../../bindings/HostedRepo";
 import { Checkbox, Select, TextInput } from "../../ui/Field";
+import { Lock } from "../../ui/icons";
 import { PROVIDERS } from "./providers";
 import { useHostedRepos, useProfileAccounts } from "./queries";
 

@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "./ui/tokens.css";
 
+/* Shippori Mincho SemiBold (OFL), subset to Latin and 浪人: headers in empty states. */
+@font-face {
+  font-family: "Shippori Mincho";
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/shippori-mincho-semibold-subset.woff2") format("woff2");
+}
+
 /* Only token colours exist; Tailwind's default palette is switched off. */
 @theme inline {
   --color-*: initial;
@@ -14,6 +22,7 @@
   --color-fg-faint: var(--rn-fg-faint);
   --color-accent: var(--rn-accent);
   --color-accent-fg: var(--rn-accent-fg);
+  --color-gold: var(--rn-gold);
   --color-danger: var(--rn-danger);
   --color-success: var(--rn-success);
   --color-warning: var(--rn-warning);
@@ -26,6 +35,62 @@
 
   --font-sans: var(--rn-font-sans);
   --font-mono: var(--rn-font-mono);
+  --font-display: var(--rn-font-display);
+
+  --animate-rn-fade: rn-fade 140ms ease-out;
+  --animate-rn-rise: rn-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-rn-pop: rn-pop 120ms ease-out;
+  --animate-rn-draw: rn-draw 1.2s cubic-bezier(0.6, 0, 0.3, 1) both;
+}
+
+@keyframes rn-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+@keyframes rn-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+/* An ensō drawn in one stroke: a 150-long dash slides along the path. */
+@keyframes rn-draw {
+  from {
+    stroke-dashoffset: 150;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* Ink dropped on paper: a blot that spreads and fades behind a toast. */
+@keyframes rn-ink {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes rn-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes rn-slide-out {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
 }
 
 @layer base {
@@ -50,6 +115,80 @@
   :focus-visible {
     outline: 2px solid var(--rn-accent);
     outline-offset: 1px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--rn-accent) 35%, transparent);
+  }
+
+  /* Motion is decoration: none when the OS asks for less. Spinners stay,
+     they carry information. */
+  @media (prefers-reduced-motion: reduce) {
+    *:not(.animate-spin),
+    ::before,
+    ::after {
+      animation-duration: 1ms !important;
+      animation-delay: 0s !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* A katana edge: a hairline with a glint of polished steel along it. */
+  .rn-edge-x {
+    background: linear-gradient(
+      90deg,
+      var(--rn-line) 0%,
+      var(--rn-edge) 18%,
+      var(--rn-line) 55%,
+      var(--rn-line) 100%
+    );
+  }
+  .rn-edge-y {
+    background: linear-gradient(
+      180deg,
+      var(--rn-line) 0%,
+      var(--rn-edge) 30%,
+      var(--rn-line) 70%,
+      var(--rn-line) 100%
+    );
+  }
+
+  /* Radix menus, popovers and tooltips. */
+  .rn-pop[data-state="open"],
+  .rn-pop[data-state="delayed-open"],
+  .rn-pop[data-state="instant-open"] {
+    animation: var(--animate-rn-pop);
+  }
+
+  .rn-toast[data-state="open"] {
+    animation: rn-slide-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .rn-toast[data-state="closed"] {
+    animation: rn-slide-out 150ms ease-in forwards;
+  }
+  .rn-toast[data-swipe="move"] {
+    transform: translateX(var(--radix-toast-swipe-move-x));
+  }
+  .rn-toast[data-swipe="end"] {
+    animation: rn-slide-out 100ms ease-out forwards;
+  }
+  /* The splash starts at the toast's inked edge. */
+  .rn-toast::before {
+    content: "";
+    position: absolute;
+    left: -60px;
+    top: 50%;
+    width: 240px;
+    height: 240px;
+    margin-top: -120px;
+    border-radius: 47% 53% 44% 56% / 52% 45% 55% 48%;
+    background: radial-gradient(circle, var(--rn-splash) 0%, transparent 65%);
+    opacity: 0;
+    pointer-events: none;
+    animation: rn-ink 900ms ease-out;
   }
 }
 

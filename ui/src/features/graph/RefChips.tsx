@@ -1,8 +1,8 @@
 import { clsx } from "clsx";
-import { Cloud, Laptop, Tag } from "lucide-react";
 
 import type { RefLabel } from "../../bindings/RefLabel";
 import { laneColor } from "../../ui/colors";
+import { Cloud, Laptop, Tag } from "../../ui/icons";
 import { Tooltip } from "../../ui/Tooltip";
 import type { GitActions } from "../ops/actions";
 import { beginDrag, dropProps, useDrag } from "../ops/drag";

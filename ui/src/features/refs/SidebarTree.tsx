@@ -1,8 +1,8 @@
 import { clsx } from "clsx";
-import { ChevronRight } from "lucide-react";
 import { useState, type ComponentProps, type ReactNode } from "react";
 
 import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
+import { ChevronRight } from "../../ui/icons";
 
 const indent = (depth: number) => ({ paddingLeft: 8 + depth * 14 });
 

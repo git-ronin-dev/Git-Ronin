@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { AccountView } from "../../bindings/AccountView";
@@ -13,6 +12,7 @@ import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { confirm } from "../../ui/confirm-store";
 import { Field, Select, TextInput } from "../../ui/Field";
+import { Copy, ExternalLink } from "../../ui/icons";
 import { toast } from "../../ui/toast-store";
 import { activeProfileId } from "../commands/commands";
 import { SettingsGroup, SettingsPage } from "../settings/SettingsPage";

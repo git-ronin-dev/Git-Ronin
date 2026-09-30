@@ -1,6 +1,7 @@
 import { clsx } from "clsx";
-import { ChevronRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
+
+import { ChevronRight } from "./icons";
 
 interface SectionProps {
   title: string;

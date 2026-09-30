@@ -1,9 +1,8 @@
-import { SearchCheck, TriangleAlert } from "lucide-react";
-
 import type { BisectState } from "../../bindings/BisectState";
 import type { Operation } from "../../bindings/Operation";
 import type { RepoInfo } from "../../bindings/RepoInfo";
 import { Button } from "../../ui/Button";
+import { SearchCheck, TriangleAlert } from "../../ui/icons";
 import { useCommitDetail } from "../commit/queries";
 import { revealCommit } from "../graph/reveal";
 import { useRepoInfo } from "../workspace/queries";

@@ -1,7 +1,7 @@
 import { clsx } from "clsx";
-import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { ArrowLeft } from "../../ui/icons";
 import { useSetUiPrefs, useUiPrefs } from "../workspace/queries";
 import { splitPath } from "./lines";
 

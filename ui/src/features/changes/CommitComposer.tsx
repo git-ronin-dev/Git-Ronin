@@ -16,10 +16,12 @@ const SUMMARY_LIMIT = 72;
 interface CommitComposerProps {
   repo: string;
   stagedCount: number;
+  /** Paths with unstaged changes: committed all at once when nothing is staged. */
+  unstaged: string[];
   conflicts: number;
 }
 
-export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerProps) {
+export function CommitComposer({ repo, stagedCount, unstaged, conflicts }: CommitComposerProps) {
   const client = useQueryClient();
   const draft = useDraft(repo);
   const { update, clear } = useDrafts.getState();
@@ -36,13 +38,15 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
   usePrefill(repo, concludes);
 
   const message = composeMessage(draft);
+  // Nothing staged: commit everything, as `git commit -a` would (plus new files).
+  const stageAll = !draft.amend && stagedCount === 0 && unstaged.length > 0;
   const blocker =
     operation !== null && !concludes && !editing
       ? "Use Continue above to go on"
       : conflicts > 0
         ? "Resolve conflicts first"
-        : !draft.amend && stagedCount === 0
-          ? "Stage changes to commit"
+        : !draft.amend && stagedCount === 0 && !stageAll
+          ? "Nothing to commit"
           : !message
             ? "Write a summary"
             : null;
@@ -70,6 +74,7 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
     if (blocker || busy) return;
     setBusy(true);
     try {
+      if (stageAll) await ipc.stageFiles(repo, unstaged);
       const result = await ipc.commit(repo, message, {
         amend: draft.amend,
         signoff: draft.signoff,
@@ -174,13 +179,15 @@ export function CommitComposer({ repo, stagedCount, conflicts }: CommitComposerP
             ? blocker
             : draft.amend
               ? "Amend previous commit"
-              : stagedCount > 0
-                ? `Commit ${stagedCount} ${stagedCount === 1 ? "file" : "files"}`
-                : "Commit"}
+              : stageAll
+                ? `Stage all and commit ${files(unstaged.length)}`
+                : `Commit ${files(stagedCount)}`}
       </Button>
     </form>
   );
 }
+
+const files = (n: number) => `${n} ${n === 1 ? "file" : "files"}`;
 
 /** Starts the message of a commit that concludes a merge (etc.) from the one git prepared. */
 function usePrefill(repo: string, enabled: boolean) {

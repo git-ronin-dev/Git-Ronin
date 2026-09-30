@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Download, LoaderCircle, RefreshCw, Upload } from "lucide-react";
 import { useState } from "react";
 
 import type { SyncStatus } from "../../bindings/SyncStatus";
@@ -8,6 +7,7 @@ import { relativeTime } from "../../lib/time";
 import { Button } from "../../ui/Button";
 import { confirm } from "../../ui/confirm-store";
 import { Field, TextInput } from "../../ui/Field";
+import { Download, LoaderCircle, RefreshCw, Upload } from "../../ui/icons";
 import { toast } from "../../ui/toast-store";
 import { exportSettings, importSettings, syncKeys, useSyncStatus } from "./queries";
 import { SettingsGroup, SettingsPage } from "./SettingsPage";

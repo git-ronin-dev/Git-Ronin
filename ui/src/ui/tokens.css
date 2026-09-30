@@ -1,78 +1,100 @@
 /*
- * Design tokens. Every colour, radius and font in the app comes from here,
- * so the Phase 8 ronin theme is a token swap rather than a rewrite.
- * Dark is the default; `data-theme="light"` on <html> switches palettes.
+ * Design tokens. Every colour, radius and font in the app comes from here.
+ * Dark (sumi ink) is the default; `data-theme="light"` on <html> switches to
+ * washi paper. Accent is vermilion (the hanko seal), with a restrained gold.
+ *
+ * `tokens.test.ts` checks WCAG AA contrast for the text pairs below, so a
+ * change that breaks it fails the tests.
  */
 :root {
   color-scheme: dark;
 
-  --rn-canvas: #141518;
-  --rn-surface: #1b1c20;
-  --rn-raised: #24252a;
-  --rn-hover: #2c2d33;
-  --rn-line: #2e3036;
-  --rn-fg: #e4e4e7;
-  --rn-fg-muted: #9a9ba3;
-  --rn-fg-faint: #62636b;
-  --rn-accent: #6b8cff;
-  --rn-accent-fg: #0b0c10;
-  --rn-danger: #ef5b5b;
-  --rn-success: #4cb782;
-  --rn-warning: #f0a93a;
+  --rn-canvas: #131214;
+  --rn-surface: #1a191b;
+  --rn-raised: #242225;
+  --rn-hover: #2e2b2e;
+  --rn-line: #38343a;
+  --rn-fg: #ede7dc;
+  --rn-fg-muted: #b0a89d;
+  --rn-fg-faint: #9a9184;
+  --rn-accent: #f26d45;
+  --rn-accent-fg: #131214;
+  --rn-gold: #d4ad5c;
+  --rn-danger: #f25f78;
+  --rn-success: #8fbf6f;
+  --rn-warning: #dcaa48;
+
+  /* The glint along a divider's edge (see `.rn-edge`). */
+  --rn-edge: #6b6158;
 
   /* Commit graph lanes, cycled by lane index. */
-  --rn-lane-0: #6b8cff;
-  --rn-lane-1: #4cb782;
-  --rn-lane-2: #f0a93a;
-  --rn-lane-3: #d46ed8;
-  --rn-lane-4: #3fb8c9;
-  --rn-lane-5: #ef5b5b;
-  --rn-lane-6: #a3b848;
-  --rn-lane-7: #b08968;
+  --rn-lane-0: #f26d45;
+  --rn-lane-1: #d4ad5c;
+  --rn-lane-2: #8fbf6f;
+  --rn-lane-3: #5fa8d8;
+  --rn-lane-4: #c290e0;
+  --rn-lane-5: #4db8a8;
+  --rn-lane-6: #e684a3;
+  --rn-lane-7: #b89c7c;
 
   /* Syntax highlighting in diffs. */
-  --rn-syn-keyword: #b99cff;
-  --rn-syn-string: #9fcf7f;
-  --rn-syn-number: #f0a93a;
-  --rn-syn-comment: #6e717c;
-  --rn-syn-type: #5ec4d6;
-  --rn-syn-definition: #7ea6ff;
-  --rn-syn-property: #e3c07b;
-  --rn-syn-macro: #ef8b6b;
-  --rn-syn-punctuation: #9a9ba3;
+  --rn-syn-keyword: #c79be3;
+  --rn-syn-string: #a8cc8c;
+  --rn-syn-number: #e2b262;
+  --rn-syn-comment: #a0978a;
+  --rn-syn-type: #6cc6b8;
+  --rn-syn-definition: #82b4e8;
+  --rn-syn-property: #dcbc90;
+  --rn-syn-macro: #f08a62;
+  --rn-syn-punctuation: #b0a89d;
 
   --rn-radius-sm: 4px;
   --rn-radius-md: 6px;
   --rn-radius-lg: 10px;
 
-  --rn-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
-  --rn-font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+  --rn-font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --rn-font-mono:
+    "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  /* Headers in empty states and onboarding only, never over data. */
+  --rn-font-display: "Shippori Mincho", "Noto Serif JP", serif;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --rn-canvas: #f6f6f7;
-  --rn-surface: #ffffff;
-  --rn-raised: #f0f0f2;
-  --rn-hover: #e7e7ea;
-  --rn-line: #dcdce0;
-  --rn-fg: #1c1d21;
-  --rn-fg-muted: #5f6068;
-  --rn-fg-faint: #9a9ba3;
-  --rn-accent: #3d63e0;
+  --rn-canvas: #f2ede3;
+  --rn-surface: #faf7f0;
+  --rn-raised: #ebe5d8;
+  --rn-hover: #e2dbcc;
+  --rn-line: #d6cdbb;
+  --rn-fg: #1f1b17;
+  --rn-fg-muted: #574f45;
+  --rn-fg-faint: #645b50;
+  --rn-accent: #b0361a;
   --rn-accent-fg: #ffffff;
-  --rn-danger: #d93a3a;
-  --rn-success: #23915c;
-  --rn-warning: #b5740f;
+  --rn-gold: #7a5c12;
+  --rn-danger: #b3203f;
+  --rn-success: #346a2f;
+  --rn-warning: #7d5606;
 
-  --rn-syn-keyword: #7c3aed;
-  --rn-syn-string: #2f7d32;
-  --rn-syn-number: #b35c00;
-  --rn-syn-comment: #8a8d96;
-  --rn-syn-type: #0e7490;
-  --rn-syn-definition: #2451c7;
-  --rn-syn-property: #8a5a00;
-  --rn-syn-macro: #b8431f;
-  --rn-syn-punctuation: #5f6068;
+  --rn-edge: #b3a68f;
+
+  --rn-lane-0: #c2421e;
+  --rn-lane-1: #9a7419;
+  --rn-lane-2: #4f8a3c;
+  --rn-lane-3: #2f73b0;
+  --rn-lane-4: #8a4fb5;
+  --rn-lane-5: #1f8577;
+  --rn-lane-6: #c0406e;
+  --rn-lane-7: #86684a;
+
+  --rn-syn-keyword: #7a3aaf;
+  --rn-syn-string: #346a2f;
+  --rn-syn-number: #8f5300;
+  --rn-syn-comment: #665e53;
+  --rn-syn-type: #0d6660;
+  --rn-syn-definition: #2458a8;
+  --rn-syn-property: #7d5610;
+  --rn-syn-macro: #a8331a;
+  --rn-syn-punctuation: #574f45;
 }

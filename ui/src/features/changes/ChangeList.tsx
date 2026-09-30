@@ -1,9 +1,9 @@
 import { clsx } from "clsx";
-import { Check, Minus, Plus, Undo2, type LucideIcon } from "lucide-react";
 
 import type { StatusEntry } from "../../bindings/StatusEntry";
 import { copyText } from "../../lib/clipboard";
 import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
+import { Check, Minus, Plus, Undo2, type Icon } from "../../ui/icons";
 import { useGitActions } from "../ops/actions";
 import { useLfsStatus } from "../ops/queries";
 import { updateView } from "../workspace/view";
@@ -40,9 +40,7 @@ export function ChangeList({ repo, side, entries, activePath, onOpen }: ChangeLi
     : shown.map((item) => ({ kind: "file", item, name: item.path, depth: 0 }));
 
   /** The row buttons, for one file or everything in a folder. */
-  const buttonsFor = (
-    targets: StatusEntry[],
-  ): { icon: LucideIcon; label: string; run: () => void }[] =>
+  const buttonsFor = (targets: StatusEntry[]): { icon: Icon; label: string; run: () => void }[] =>
     side === "unstaged"
       ? [
           { icon: Undo2, label: "Discard changes", run: () => void actions.discard(targets) },
@@ -150,7 +148,7 @@ function RowButtons({
   buttons,
   what,
 }: {
-  buttons: { icon: LucideIcon; label: string; run: () => void }[];
+  buttons: { icon: Icon; label: string; run: () => void }[];
   what: string;
 }) {
   return (

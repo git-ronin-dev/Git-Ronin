@@ -22,6 +22,7 @@ export const config: Config = {
       fileTree: false,
       graphWidth: 0,
       terminalFontSize: 13,
+      sounds: false,
     },
     git: { autoFetchMinutes: 0 },
     keybindings: {},

@@ -3,9 +3,9 @@ import type { ReactElement } from "react";
 
 import type { MenuItem } from "./ContextMenu";
 
-const content = "z-50 min-w-44 rounded-md border border-line bg-raised p-1 shadow-xl";
+const content = "rn-pop z-50 min-w-44 rounded-md border border-line bg-raised p-1 shadow-xl";
 const item =
-  "flex h-7 cursor-default items-center rounded-sm px-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-accent data-[highlighted]:text-accent-fg";
+  "flex h-7 cursor-default items-center rounded-sm px-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-hover data-[highlighted]:text-fg data-[highlighted]:shadow-[inset_2px_0_0_var(--rn-accent)]";
 
 function Items({ items }: { items: MenuItem[] }) {
   return items.map((it, i) =>

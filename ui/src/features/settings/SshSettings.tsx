@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, KeyRound, Upload } from "lucide-react";
 import { useState } from "react";
 
 import type { SshKey } from "../../bindings/SshKey";
@@ -8,6 +7,7 @@ import { ipc } from "../../lib/ipc";
 import { Button } from "../../ui/Button";
 import { DropdownMenu } from "../../ui/DropdownMenu";
 import { Field, TextInput } from "../../ui/Field";
+import { Copy, KeyRound, Upload } from "../../ui/icons";
 import { toast } from "../../ui/toast-store";
 import { activeProfileId } from "../commands/commands";
 import { PROVIDERS } from "../hosting/providers";

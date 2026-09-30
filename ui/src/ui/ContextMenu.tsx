@@ -9,7 +9,7 @@ export function ContextMenu({ items, children }: { items: MenuItem[]; children: 
     <RadixContextMenu.Root>
       <RadixContextMenu.Trigger asChild>{children}</RadixContextMenu.Trigger>
       <RadixContextMenu.Portal>
-        <RadixContextMenu.Content className="z-50 min-w-44 rounded-md border border-line bg-raised p-1 shadow-xl">
+        <RadixContextMenu.Content className="rn-pop z-50 min-w-44 rounded-md border border-line bg-raised p-1 shadow-xl">
           {items.map((item, i) =>
             item === "separator" ? (
               <RadixContextMenu.Separator key={i} className="my-1 h-px bg-line" />
@@ -18,7 +18,7 @@ export function ContextMenu({ items, children }: { items: MenuItem[]; children: 
                 key={i}
                 disabled={item.disabled}
                 onSelect={item.onSelect}
-                className="flex h-7 cursor-default items-center rounded-sm px-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-accent data-[highlighted]:text-accent-fg"
+                className="flex h-7 cursor-default items-center rounded-sm px-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-hover data-[highlighted]:text-fg data-[highlighted]:shadow-[inset_2px_0_0_var(--rn-accent)]"
               >
                 {item.label}
               </RadixContextMenu.Item>

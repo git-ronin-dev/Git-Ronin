@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleDot, GitPullRequest, LogIn, Plus, RefreshCw } from "lucide-react";
 
 import { openSettings } from "../../app/overlays";
 import type { Issue } from "../../bindings/Issue";
@@ -8,6 +7,7 @@ import type { RepoLink } from "../../bindings/RepoLink";
 import { copyText } from "../../lib/clipboard";
 import { openUrl } from "../../lib/open";
 import { ContextMenu } from "../../ui/ContextMenu";
+import { CircleDot, GitPullRequest, LogIn, Plus, RefreshCw } from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { Tooltip } from "../../ui/Tooltip";
 import { openDialog } from "../ops/dialogs";

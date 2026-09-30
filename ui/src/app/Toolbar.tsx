@@ -1,20 +1,3 @@
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  ChevronDown,
-  GitBranchPlus,
-  PanelLeft,
-  PanelRight,
-  Redo2,
-  Rocket,
-  Search,
-  Settings,
-  SquareTerminal,
-  Undo2,
-  type LucideIcon,
-} from "lucide-react";
 import { forwardRef, type ComponentProps } from "react";
 
 import type { PullMode } from "../bindings/PullMode";
@@ -30,6 +13,23 @@ import { useRefs, useRepoInfo } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
 import { updateView, useRepoView } from "../features/workspace/view";
 import { DropdownMenu } from "../ui/DropdownMenu";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ChevronDown,
+  GitBranchPlus,
+  PanelLeft,
+  PanelRight,
+  Redo2,
+  PaperPlane,
+  Search,
+  Settings,
+  SquareTerminal,
+  Undo2,
+  type Icon,
+} from "../ui/icons";
 import { toast } from "../ui/toast-store";
 import { Tooltip } from "../ui/Tooltip";
 import { openSettings, useOverlays } from "./overlays";
@@ -88,7 +88,7 @@ export function Toolbar({ hasRepo, onToggleSidebar, onToggleDetails, onSearch }:
           <ToolButton icon={SquareTerminal} label="Toggle terminal" disabled />
         )}
         <ToolButton
-          icon={Rocket}
+          icon={PaperPlane}
           label="Launchpad"
           shortcut={useShortcutLabel("hosting.launchpad")}
           onClick={() => useOverlays.setState({ launchpad: true })}
@@ -265,7 +265,7 @@ function StashButtons({ repo }: { repo: string }) {
 }
 
 interface ToolButtonProps {
-  icon: LucideIcon;
+  icon: Icon;
   label: string;
   /** Overrides the label as the tooltip. */
   tooltip?: string;

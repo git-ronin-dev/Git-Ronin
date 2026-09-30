@@ -160,6 +160,8 @@ pub struct UiPrefs {
     /// Width of the graph column in pixels; 0 sizes it to the lanes.
     pub graph_width: u32,
     pub terminal_font_size: u32,
+    /// Short sounds when an action succeeds or fails. Off by default.
+    pub sounds: bool,
 }
 
 impl Default for UiPrefs {
@@ -172,6 +174,7 @@ impl Default for UiPrefs {
             file_tree: false,
             graph_width: 0,
             terminal_font_size: 13,
+            sounds: false,
         }
     }
 }

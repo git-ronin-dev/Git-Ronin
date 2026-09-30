@@ -1,5 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
+import { useState } from "react";
+
+import { copyText } from "../../lib/clipboard";
+import { ipc } from "../../lib/ipc";
+import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
 import {
   Archive,
   Cloud,
@@ -10,12 +15,7 @@ import {
   Plus,
   Search,
   Tag,
-} from "lucide-react";
-import { useState } from "react";
-
-import { copyText } from "../../lib/clipboard";
-import { ipc } from "../../lib/ipc";
-import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
+} from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { toast } from "../../ui/toast-store";
 import { Tooltip } from "../../ui/Tooltip";

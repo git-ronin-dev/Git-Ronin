@@ -1,7 +1,6 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { clsx } from "clsx";
-import { ArrowDownToLine, FolderOpen, LoaderCircle, Plus, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
 
 import { useOverlays } from "../../app/overlays";
@@ -14,6 +13,7 @@ import { Button } from "../../ui/Button";
 import { confirm } from "../../ui/confirm-store";
 import { Dialog } from "../../ui/Dialog";
 import { TextInput } from "../../ui/Field";
+import { ArrowDownToLine, FolderOpen, LoaderCircle, Plus, RefreshCw, X } from "../../ui/icons";
 import { toast } from "../../ui/toast-store";
 import { Tooltip } from "../../ui/Tooltip";
 import { describeHead } from "../repo/head";

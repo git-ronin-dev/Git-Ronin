@@ -9,6 +9,7 @@ import { ipc } from "../../lib/ipc";
 import { formatDate, relativeTime } from "../../lib/time";
 import { Avatar } from "../../ui/Avatar";
 import { ContextMenu } from "../../ui/ContextMenu";
+import { EmptyNote } from "../../ui/EmptyNote";
 import { countChanges, useWorkingStatus } from "../changes/queries";
 import { shortRev, useGitActions, type GitActions } from "../ops/actions";
 import { dropProps, useDrag } from "../ops/drag";
@@ -194,7 +195,9 @@ export function GraphView({ repo }: { repo: string }) {
         className="min-h-0 flex-1 overflow-auto outline-none"
       >
         {rows.complete && rows.count === 0 && changes === 0 ? (
-          <p className="p-8 text-center text-fg-muted">No commits yet.</p>
+          <EmptyNote title="No commits yet">
+            Stage files in the details panel and write the first commit.
+          </EmptyNote>
         ) : (
           <div style={{ height: virtualizer.getTotalSize() }} className="relative">
             {changes > 0 && (

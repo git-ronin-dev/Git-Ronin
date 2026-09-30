@@ -30,6 +30,7 @@ import {
   onSyncChanged,
   onWorktreeChanged,
 } from "../lib/ipc";
+import { setSoundsEnabled } from "../lib/sound";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Toaster } from "../ui/Toast";
 import { toast } from "../ui/toast-store";
@@ -41,9 +42,12 @@ import { applyTheme } from "./theme";
 
 export function App() {
   const client = useQueryClient();
-  const theme = useUiPrefs()?.theme ?? "system";
+  const prefs = useUiPrefs();
+  const theme = prefs?.theme ?? "system";
+  const sounds = prefs?.sounds ?? false;
 
   useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => setSoundsEnabled(sounds), [sounds]);
   useShortcuts();
   useAutoFetch();
   useSyncConflictNotice();
