@@ -47,6 +47,18 @@ impl Bitbucket {
         }
         Ok(items)
     }
+
+    /// The slugs of the workspaces the user can see. Bitbucket dropped its
+    /// cross-workspace listings, so repositories and pull requests are read
+    /// one workspace at a time.
+    fn workspaces(&self) -> Result<Vec<String>> {
+        let items = self.paged("/user/workspaces?pagelen=100", 1000)?;
+        Ok(items
+            .iter()
+            .map(|w| w.s("/workspace/slug"))
+            .filter(|slug| !slug.is_empty())
+            .collect())
+    }
 }
 
 fn repo_url(path: &str) -> Result<String> {
@@ -168,11 +180,20 @@ impl Provider for Bitbucket {
     }
 
     fn repos(&self, limit: usize) -> Result<Vec<HostedRepo>> {
-        let items = self.paged(
-            "/repositories?role=member&sort=-updated_on&pagelen=100",
-            limit,
-        )?;
-        Ok(items.iter().map(repo).collect())
+        let mut repos = Vec::new();
+        for ws in self.workspaces()? {
+            let items = self.paged(
+                &format!(
+                    "/repositories/{}?role=member&sort=-updated_on&pagelen=100",
+                    encode(&ws)
+                ),
+                limit,
+            )?;
+            repos.extend(items.iter().map(repo));
+        }
+        repos.sort_by_key(|r| std::cmp::Reverse(r.updated));
+        repos.truncate(limit);
+        Ok(repos)
     }
 
     fn fork(&self, path: &str) -> Result<HostedRepo> {
@@ -192,17 +213,24 @@ impl Provider for Bitbucket {
 
     fn my_pull_requests(&self, me: &User) -> Result<Vec<MyPullRequest>> {
         // Bitbucket can list what a user wrote, not what they review.
-        let items = self.paged(
-            &format!("/pullrequests/{}?state=OPEN&pagelen=50", encode(&me.id)),
-            100,
-        )?;
-        Ok(items
-            .iter()
-            .map(|v| MyPullRequest {
+        let mut prs = Vec::new();
+        for ws in self.workspaces()? {
+            let items = self.paged(
+                &format!(
+                    "/workspaces/{}/pullrequests/{}?state=OPEN&pagelen=50",
+                    encode(&ws),
+                    encode(&me.id)
+                ),
+                100,
+            )?;
+            prs.extend(items.iter().map(|v| MyPullRequest {
                 pr: pr(v),
                 involvement: vec![Involvement::Author],
-            })
-            .collect())
+            }));
+        }
+        prs.sort_by_key(|p| std::cmp::Reverse(p.pr.updated));
+        prs.truncate(100);
+        Ok(prs)
     }
 
     fn pull_request(&self, path: &str, number: u64) -> Result<PullRequestDetail> {
@@ -416,7 +444,12 @@ mod tests {
             )
             .on(
                 Method::Get,
-                "/repositories?role=member",
+                "/user/workspaces",
+                json!({"values": [{"workspace": {"slug": "t"}}]}),
+            )
+            .on(
+                Method::Get,
+                "/repositories/t?role=member",
                 json!({
                     "values": [{"full_name": "t/a", "name": "a", "is_private": true,
                         "links": {"clone": [
@@ -424,7 +457,7 @@ mod tests {
                             {"name": "ssh", "href": "git@bitbucket.org:t/a.git"}],
                             "html": {"href": "https://bitbucket.org/t/a"}},
                         "mainbranch": {"name": "main"}}],
-                    "next": "https://api.bitbucket.org/2.0/repositories?role=member&page=2"
+                    "next": "https://api.bitbucket.org/2.0/repositories/t?role=member&page=2"
                 }),
             );
         let bb = provider(
@@ -439,6 +472,41 @@ mod tests {
             Some("git@bitbucket.org:t/a.git")
         );
         assert_eq!(repos[1].clone_https, "https://bitbucket.org/t/b.git");
+    }
+
+    #[test]
+    fn lists_my_pull_requests_per_workspace() {
+        let fake = Fake::new()
+            .on(
+                Method::Get,
+                "/user/workspaces",
+                json!({"values": [{"workspace": {"slug": "a"}}, {"workspace": {"slug": "b"}}]}),
+            )
+            .on(
+                Method::Get,
+                "/workspaces/a/",
+                json!({"values": [pr_json()]}),
+            )
+            .on(Method::Get, "/workspaces/b/", json!({"values": []}));
+        let bb = provider(
+            &fake,
+            &account(ProviderKind::Bitbucket, "https://bitbucket.org"),
+        );
+        let me = User {
+            id: "{u-1}".into(),
+            ..User::default()
+        };
+        let mine = bb.my_pull_requests(&me).unwrap();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].pr.number, 8);
+        let (request, _) = fake.sent(Method::Get, "/workspaces/a/");
+        assert!(
+            request
+                .url
+                .ends_with("/2.0/workspaces/a/pullrequests/%7Bu-1%7D?state=OPEN&pagelen=50"),
+            "{}",
+            request.url
+        );
     }
 
     #[test]
