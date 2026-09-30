@@ -4,143 +4,113 @@
 
 A free, cross-platform Git GUI. Linux first; Windows and macOS from the same code.
 
-Built with Tauri 2 (Rust) and React + TypeScript. Reads go through
-[gitoxide](https://github.com/GitoxideLabs/gitoxide); writes and network operations
-run the system `git`, so your hooks, credential helpers, SSH config and signing
-work exactly as they do on the command line.
+Why another one? Free Git GUIs on Linux suck spectacularly: interfaces frozen
+in 2009, unreadable diffs, "stage hunk" buttons that stage something,
+sometimes. GitKraken looks great until you open a private repository, where it
+turns into a very polished paywall.
+
+But AI made software made-to-measure: when nothing on the shelf fits, you have
+the exact tool you need built. So Opus Chad 5.5 built this fantastic Git client.
+
+> [!WARNING]
+> Git Ronin was written by Claude Opus and is still being tested. It seems to
+> work, but keep a remote or backup of anything you care about, and please
+> report what breaks.
+
+Built with Tauri 2 (Rust) and React + TypeScript. Reads use
+[gitoxide](https://github.com/GitoxideLabs/gitoxide); writes and network
+operations run your system `git`, so hooks, credential helpers, SSH config and
+signing behave as on the command line.
 
 ## Install
 
-Downloads are on the project's GitHub Releases page. Git Ronin runs the git
-you have installed (2.30 or newer), except the Flatpak, which brings its own.
+Get a build from GitHub Releases. Git Ronin needs git 2.30+ (the Flatpak
+bundles its own).
 
-| System  | Download                                                       |
-| ------- | -------------------------------------------------------------- |
-| Linux   | `.AppImage` (any distribution), `.deb`, `.rpm`, or `.flatpak`  |
-| Windows | `*-setup.exe` (installs for the current user; no admin needed) |
-| macOS   | `.dmg` (macOS 13 or newer, Intel and Apple silicon)            |
+| System  | Download                                    |
+| ------- | ------------------------------------------- |
+| Linux   | `.AppImage`, `.deb`, `.rpm` or `.flatpak`   |
+| Windows | `*-setup.exe` (per-user install, no admin)  |
+| macOS   | `.dmg` (macOS 13+, Intel and Apple silicon) |
 
-The builds aren't signed with a paid certificate yet. On Windows,
-SmartScreen asks for confirmation ("More info" → "Run anyway"). On macOS,
-open the app once with right-click → Open, or allow it under System
-Settings → Privacy & Security.
+Builds aren't code-signed yet: on Windows choose "More info" → "Run anyway";
+on macOS right-click → Open once.
 
-The AppImage, the `.deb`/`.rpm` and the Windows and macOS apps update
-themselves: Git Ronin checks for a new version at startup and twice a day
-(Settings → General can turn that off), then offers "Update to …" in the
-status bar. Installing the `.deb` or `.rpm` update asks for your password.
-Flatpak updates come from your software center.
+All builds except the Flatpak update themselves (Settings → General to turn
+off); the Flatpak updates through your software center.
 
-From a terminal, `git-ronin <path>` opens the repository containing `path`
-(in the running window, if there is one).
+`git-ronin <path>` opens the repository containing `path`, in the running
+window if there is one.
 
-## Status
+## Features
 
-All eight phases of the roadmap:
-
-- Repository tabs, restored between sessions, and a recent list
-- Commit graph for all branches, remotes and tags; opens instantly and loads
-  history on demand (tested on git.git's 85k commits)
-- Search by message, author, SHA or path; hide or solo any branch
-- Commit details with changed files; unified and split diffs with syntax
-  highlighting, whitespace-insensitive mode and image diffs
-- Uncommitted changes above the graph: stage, unstage or discard whole
-  files, single hunks or single lines; add files to `.gitignore`
-- Commit with a summary and body, amend and sign-off; hooks and GPG/SSH
-  signing apply as configured
-- Stash (optionally with untracked files or keeping the index), then apply,
-  pop or delete stashes
-- Refreshes by itself when the repository or its files change outside the
-  app; ignored directories such as `node_modules` are not watched
-- Branches and tags: create, check out, rename, delete, set upstream;
-  push and delete tags on remotes
-- Remotes: add, edit, remove; fetch (and auto-fetch), pull (merge, rebase
-  or fast-forward only), push, with a safe force push when rejected
-- Clone with progress, or create a new repository
-- Drag a branch onto another to merge, rebase, reset or push it
-- Cherry-pick, revert, reset and detached checkout from the commit menu;
-  continue, skip or abort a merge or rebase that stopped on conflicts
-- Undo and redo (Ctrl+Z / Ctrl+Shift+Z), never rewriting pushed commits
-- Credential helpers work as usual; otherwise the app asks for the
-  username, password or SSH passphrase itself
-
-- Merge conflict editor, interactive rebase, blame and file history,
-  bisect, submodules, working trees, Git LFS and Git Flow
-- Settings, command palette, rebindable shortcuts, profiles, workspaces,
-  SSH keys, a terminal panel, and settings export or sync
-- GitHub, GitLab, Bitbucket, Azure DevOps and Jira accounts (token or
-  browser sign-in, kept in your system's keyring): pull requests (view,
-  comment, approve, merge, check out, create), issues, CI checks, a
-  launchpad of everything waiting for you, cloning and forking from your
-  accounts, and HTTPS pushes without a password prompt
-
-- Installers for Linux, Windows and macOS, with signed self-updates
-
-- The ronin theme: sumi-ink dark and washi-paper light palettes with a
-  vermilion accent (WCAG AA contrast in both), its own icons, ensō commits,
-  stashes and bisect marks in the graph, a welcome screen with first steps,
-  gentle motion (none when the system asks for reduced motion), and
-  optional sounds
+- **Repositories:** tabs restored between sessions, recent list, clone, init,
+  workspaces, auto-refresh when files change
+- **Graph:** all branches, remotes and tags, lazy-loaded (fast on git.git's
+  85k commits); search by message, author, SHA or path; hide or solo refs
+- **Diffs:** unified or split, syntax highlighting, ignore whitespace, images
+- **Changes:** stage, unstage or discard files, hunks or lines; add to
+  `.gitignore`; commit, amend, sign-off; stash with untracked files or kept index
+- **Branches, tags, remotes:** create, rename, delete, set upstream; fetch,
+  auto-fetch, pull (merge, rebase, ff-only), push with safe force push
+- **History editing:** drag a branch onto another to merge, rebase, reset or
+  push; cherry-pick, revert, reset, interactive rebase, conflict editor
+- **Undo/redo** (Ctrl+Z / Ctrl+Shift+Z), never rewriting pushed commits
+- **More git:** blame, file history, bisect, submodules, worktrees, LFS, Git Flow
+- **App:** command palette, rebindable shortcuts, profiles, SSH key
+  management, terminal panel, settings export and sync through a git repo
+- **Hosting:** GitHub, GitLab, Bitbucket (Cloud and Data Center), Azure DevOps
+  and Jira, via token or, for GitLab, browser sign-in; secrets live
+  in the system keyring. Pull requests (view, comment, approve, merge, check
+  out, create), issues, CI checks, a launchpad, clone and fork from accounts,
+  HTTPS push without password prompts
+- **Theme:** sumi-ink dark and washi-paper light with a vermilion accent (WCAG
+  AA), ensō graph marks, respects reduced motion, optional sounds
 
 ## Layout
 
-| Path                   | What                                                       |
-| ---------------------- | ---------------------------------------------------------- |
-| `crates/ronin-git`     | Git engine. No Tauri dependency; tested against temp repos |
-| `crates/ronin-config`  | Settings: `portable.toml` (shareable) and `local.toml`     |
-| `crates/ronin-hosting` | Hosting services: GitHub, GitLab, Bitbucket, Azure, Jira   |
-| `src-tauri`            | Desktop shell: IPC commands, repository sessions, watcher  |
-| `ui`                   | React front end. `ui/src/bindings` is generated by ts-rs   |
-| `packaging`            | Linux desktop entry, AppStream metadata, Flatpak manifest  |
-| `scripts/e2e`          | Container checks of the built packages and of updating     |
-| `scripts/brand`        | Recolours the logo master into the app's palette           |
+| Path                   | What                                                   |
+| ---------------------- | ------------------------------------------------------ |
+| `crates/ronin-git`     | Git engine, no Tauri dependency                        |
+| `crates/ronin-config`  | Settings (`portable.toml`, `local.toml`) and accounts  |
+| `crates/ronin-hosting` | Hosting service clients                                |
+| `src-tauri`            | Desktop shell: IPC, repository sessions, watcher       |
+| `ui`                   | React front end (`ui/src/bindings` generated by ts-rs) |
+| `packaging`            | Linux desktop entry, AppStream, Flatpak manifest       |
+| `scripts/e2e`          | Container tests of packages and updates                |
+| `scripts/brand`        | Recolours the logo into the app palette                |
 
 ## Development
 
-Requirements: git ≥ 2.30, Node 24, Rust (pinned by `rust-toolchain.toml`; rustup installs it).
-
-Linux system libraries:
+Needs git 2.30+, Node 24 and Rust (pinned in `rust-toolchain.toml`). Linux
+also needs the WebKitGTK stack:
 
 ```sh
-# Fedora
-sudo dnf install webkit2gtk4.1-devel openssl-devel librsvg2-devel libappindicator-gtk3-devel
-# Debian / Ubuntu
-sudo apt install libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev libappindicator3-dev
+sudo dnf install webkit2gtk4.1-devel openssl-devel librsvg2-devel libappindicator-gtk3-devel   # Fedora
+sudo apt install libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev libappindicator3-dev             # Debian/Ubuntu
 ```
 
-Windows needs WebView2 (preinstalled on Windows 10/11). macOS needs Xcode command line tools.
+Windows needs WebView2 (preinstalled on 10/11); macOS needs the Xcode command
+line tools.
 
 ```sh
 npm install
-npm run dev          # launch the app with hot reload
-npm run check        # UI typecheck, lint, format, tests
-cargo test           # engine tests; also regenerates ui/src/bindings
+npm run dev        # app with hot reload
+npm run check      # UI typecheck, lint, format, tests
+cargo test         # engine tests; regenerates ui/src/bindings
 cargo clippy --workspace --all-targets
 cargo run --release -p ronin-git --example graph_bench -- <repo>   # graph timings
+npx tauri build    # packages in target/release/bundle
+scripts/e2e/smoke.sh [--wayland] <bundle>   # install and start a package in a clean container
 ```
 
-Settings live in the platform config directory (`~/.config/com.gitronin.desktop`
-on Linux).
+Settings live in `~/.config/com.gitronin.desktop` on Linux.
 
-### Packages
-
-```sh
-npx tauri build                              # bundles for this system in target/release/bundle
-scripts/e2e/smoke.sh <.AppImage|.deb|.rpm|.flatpak>   # install in a clean container and start it
-scripts/e2e/smoke.sh --wayland <bundle>      # the same under a headless Wayland compositor
-```
-
-The Flatpak repackages the `.deb`; see `packaging/flatpak/com.gitronin.desktop.yml`.
-
-### Releases
-
-Bump `version` in `Cargo.toml`, then push a tag `v<version>`. The Release
-workflow builds every package on GitHub's runners, uploads them to a draft
-release with the signed `latest.json` the updater reads, and attaches a
-Flatpak plus a manifest ready for Flathub. Publishing the draft releases the
-update. The workflow's header lists the secrets it uses: the updater signing
-key (without it the builds don't update themselves), and optionally Apple
-signing and notarization.
+**Releases:** bump `version` in `Cargo.toml` and push tag `v<version>`. The
+Release workflow builds all packages into a draft release with the signed
+`latest.json` for the updater, plus a Flathub-ready manifest; publishing the
+draft ships the update. Required secrets (updater key, optional Apple signing)
+are listed in the workflow header.
 
 ## License
 
