@@ -50,6 +50,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      # Failures are also reported as annotations, readable without logs.
+      - name: cargo test --workspace
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --workspace --no-fail-fast 2>&1 | tee test.log && exit 0
+          awk '{sub(/\r$/, "")}
+               /^---- .* stdout ----$/ {if (m) print m; m=$0; next}
+               /^failures:$/ || /^test result:/ {if (m) print m; m=""; next}
+               m != "" {m = m "%0A" $0}
+               END {if (m) print m}' test.log > failures.txt
+          [ -s failures.txt ] || tail -n 40 test.log | awk '{printf "%s%%0A", $0}' > failures.txt
+          cut -c1-4000 failures.txt | sed 's/^/::error::/'
+          exit 1
       - name: Generated TypeScript bindings are committed
         run: git diff --exit-code ui/src/bindings
