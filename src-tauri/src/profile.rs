@@ -292,7 +292,7 @@ mod tests {
         assert_eq!(quote(r#"a "b" \c"#), r#""a \"b\" \\c""#);
         assert_eq!(file_name("../x y"), "___x_y");
         let home = Path::new("/h");
-        assert_eq!(expand("~/k", home), Path::new("/h/k").to_string_lossy());
+        assert_eq!(expand("~/k", home), home.join("k").to_string_lossy());
         assert_eq!(expand("/abs", home), "/abs");
     }
 }

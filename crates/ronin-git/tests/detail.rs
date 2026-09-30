@@ -128,7 +128,7 @@ fn diffs_a_file_between_commits() {
 #[test]
 fn diffs_root_commits_and_glob_like_names() {
     let repo = TestRepo::new();
-    let oid = repo.commit_file("*.txt", "star\n", "odd name");
+    let oid = repo.commit_file("[ab].txt", "star\n", "odd name");
     repo.commit_file("x.txt", "x\n", "unrelated");
 
     let diff = file_diff(
@@ -136,7 +136,7 @@ fn diffs_root_commits_and_glob_like_names() {
         repo.path(),
         None,
         &oid,
-        "*.txt",
+        "[ab].txt",
         None,
         DiffOptions::default(),
     )

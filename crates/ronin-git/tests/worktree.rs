@@ -147,24 +147,31 @@ fn stages_unstages_and_discards_whole_files() {
     repo.commit_file("gone.txt", "g\n", "second");
     repo.write("a.txt", "changed\n");
     std::fs::remove_file(repo.path().join("gone.txt")).unwrap();
-    repo.write("*.txt", "literal name\n");
+    // Brackets instead of `*`, which Windows doesn't allow in file names.
+    repo.write("[ab].txt", "literal name\n");
 
-    let all: Vec<String> = ["a.txt", "gone.txt", "*.txt"].map(Into::into).into();
+    let all: Vec<String> = ["a.txt", "gone.txt", "[ab].txt"].map(Into::into).into();
     stage_files(&repo.git, repo.path(), &all).unwrap();
     let s = st(&repo);
     assert!(s.unstaged.is_empty());
     assert_eq!(
         paths(&s.staged),
         [
-            ("*.txt", FileStatus::Added),
+            ("[ab].txt", FileStatus::Added),
             ("a.txt", FileStatus::Modified),
             ("gone.txt", FileStatus::Deleted)
         ]
     );
 
-    // A literal pathspec: `*.txt` must not unstage every text file.
-    unstage_files(&repo.git, repo.path(), &["*.txt".into()]).unwrap();
-    assert_eq!(st(&repo).staged.len(), 2);
+    // A literal pathspec: `[ab].txt` must not unstage `a.txt`.
+    unstage_files(&repo.git, repo.path(), &["[ab].txt".into()]).unwrap();
+    assert_eq!(
+        paths(&st(&repo).staged),
+        [
+            ("a.txt", FileStatus::Modified),
+            ("gone.txt", FileStatus::Deleted)
+        ]
+    );
 
     unstage_files(&repo.git, repo.path(), &all).unwrap();
     let s = st(&repo);
@@ -173,7 +180,7 @@ fn stages_unstages_and_discards_whole_files() {
     assert!(st(&repo).is_clean());
     assert_eq!(read(&repo, "a.txt"), "a\n");
     assert_eq!(read(&repo, "gone.txt"), "g\n");
-    assert!(!repo.path().join("*.txt").exists());
+    assert!(!repo.path().join("[ab].txt").exists());
 }
 
 #[test]

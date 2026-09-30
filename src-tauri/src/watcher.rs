@@ -398,7 +398,12 @@ mod tests {
         std::fs::write(root.join(".gitignore"), "/target\nnode_modules/\n").unwrap();
         let mut found: Vec<String> = walk_dirs(root, None)
             .iter()
-            .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().into_owned())
+            .map(|p| {
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
             .collect();
         found.sort();
         assert_eq!(found, ["", "src", "src/deep"]);
