@@ -16,9 +16,9 @@ export function RepoTabs() {
     <div
       role="tablist"
       aria-label="Open repositories"
-      className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto bg-base px-2"
+      className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto bg-base px-2"
     >
-      <img src={logo} alt="" width={28} height={28} className="mr-1 shrink-0" />
+      <img src={logo} alt="" width={38} height={38} className="mr-1.5 shrink-0" />
       {tabs.map((tab) => (
         <div
           key={tab.path}
