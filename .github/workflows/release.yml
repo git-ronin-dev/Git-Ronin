@@ -2,13 +2,16 @@ name: Release
 
 # Pushing a tag such as v0.2.0 builds every bundle and uploads them to a
 # draft GitHub release, with the signed `latest.json` the updater reads.
-# Publishing the draft makes it the update. Running the workflow by hand
-# builds the same bundles as artifacts, without a release.
+# Once every bundle is up, the draft is published, which makes it the
+# update. Running the workflow by hand builds the same bundles as
+# artifacts, without a release.
 #
-# Secrets (all optional; without them the matching step is skipped):
+# Secrets:
 #   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 #     sign updates (`npx tauri signer generate`); the public key is in
-#     src-tauri/tauri.conf.json. Without them the builds don't update.
+#     src-tauri/tauri.conf.json. Required for tags; builds run by hand
+#     without them don't update.
+# Optional secrets:
 #   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
 #   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
 #     sign and notarize the macOS app; without them it is signed ad hoc.
@@ -101,6 +104,9 @@ jobs:
             }
           }
           EOF
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set: a release must be able to update itself."
+            exit 1
           else
             echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: these builds will not update themselves."
             echo '{}' > release.conf.json
@@ -184,3 +190,25 @@ jobs:
           mv git-ronin.flatpak "git-ronin_${version}_x86_64.flatpak"
           gh release upload "$GITHUB_REF_NAME" --clobber \
             "git-ronin_${version}_x86_64.flatpak" com.gitronin.desktop.yml
+
+  # The Flatpak is attached separately and doesn't hold up the release.
+  publish:
+    if: github.ref_type == 'tag'
+    needs: bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check the updater manifest, then publish the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --pattern latest.json
+          for platform in linux-x86_64 linux-x86_64-deb linux-x86_64-rpm \
+            windows-x86_64 darwin-aarch64 darwin-x86_64; do
+            if ! jq -e --arg p "$platform" '.platforms[$p].signature | length > 0' latest.json >/dev/null; then
+              echo "::error::latest.json has no signed $platform update"
+              cat latest.json
+              exit 1
+            fi
+          done
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

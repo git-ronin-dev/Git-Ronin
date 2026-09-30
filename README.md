@@ -34,7 +34,8 @@ bundles its own).
 | macOS   | `.dmg` (macOS 13+, Intel and Apple silicon) |
 
 Builds aren't code-signed yet: on Windows choose "More info" → "Run anyway";
-on macOS right-click → Open once.
+on macOS open the app once, then allow it under System Settings → Privacy &
+Security → "Open Anyway".
 
 All builds except the Flatpak update themselves (Settings → General to turn
 off); the Flatpak updates through your software center.
@@ -108,9 +109,10 @@ Settings live in `~/.config/com.gitronin.desktop` on Linux.
 
 **Releases:** bump `version` in `Cargo.toml` and push tag `v<version>`. The
 Release workflow builds all packages into a draft release with the signed
-`latest.json` for the updater, plus a Flathub-ready manifest; publishing the
-draft ships the update. Required secrets (updater key, optional Apple signing)
-are listed in the workflow header.
+`latest.json` for the updater, publishes it once every platform is in (which
+ships the update), then attaches the Flatpak and a Flathub-ready manifest.
+Required secrets (updater key, optional Apple signing) are listed in the
+workflow header.
 
 ## License
 
