@@ -1,4 +1,5 @@
-use std::collections::{HashMap, HashSet};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 use gix::ObjectId;
@@ -103,8 +104,9 @@ type NoFilter = fn(&gix::hash::oid) -> bool;
 /// stream by commit time instead, like plain `git log`. That order only breaks
 /// "children before parents" under clock skew, which costs a missing edge.
 enum Walk {
-    Topo(Topo<gix::OdbHandle, NoFilter>),
-    ByTime(Simple<gix::OdbHandle, NoFilter>),
+    // Both are large; boxed so the enum isn't.
+    Topo(Box<Topo<gix::OdbHandle, NoFilter>>),
+    ByTime(Box<TieOrdered>),
 }
 
 impl Iterator for Walk {
@@ -113,9 +115,105 @@ impl Iterator for Walk {
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             Walk::Topo(w) => w.next().map(|r| r.map_err(gix_err)),
-            Walk::ByTime(w) => w.next().map(|r| r.map_err(gix_err)),
+            Walk::ByTime(w) => w.next(),
         }
     }
+}
+
+/// Runs of equal commit times longer than this are passed on as they come.
+const MAX_TIE_RUN: usize = 10_000;
+
+/// A walk by commit time whose commits with equal times come children first.
+///
+/// Commit time alone can't order commits made in the same second, which a
+/// rebase or a script produces routinely; from two tips, a commit could then
+/// come before its own child and lose its edge. Each run of equal times is
+/// buffered and put in topological order, keeping the walk's order otherwise.
+struct TieOrdered {
+    inner: Simple<gix::OdbHandle, NoFilter>,
+    /// The first commit after the current run.
+    next: Option<Result<Info>>,
+    ready: VecDeque<Info>,
+}
+
+impl TieOrdered {
+    fn new(inner: Simple<gix::OdbHandle, NoFilter>) -> Self {
+        Self {
+            inner,
+            next: None,
+            ready: VecDeque::new(),
+        }
+    }
+
+    fn pull(&mut self) -> Option<Result<Info>> {
+        self.next
+            .take()
+            .or_else(|| self.inner.next().map(|r| r.map_err(gix_err)))
+    }
+}
+
+impl Iterator for TieOrdered {
+    type Item = Result<Info>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(info) = self.ready.pop_front() {
+            return Some(Ok(info));
+        }
+        let first = match self.pull()? {
+            Ok(info) => info,
+            Err(e) => return Some(Err(e)),
+        };
+        let Some(time) = first.commit_time else {
+            return Some(Ok(first));
+        };
+        let mut run = vec![first];
+        while run.len() < MAX_TIE_RUN {
+            match self.pull() {
+                Some(Ok(info)) if info.commit_time == Some(time) => run.push(info),
+                other => {
+                    self.next = other;
+                    break;
+                }
+            }
+        }
+        self.ready = children_first(run).into();
+        self.ready.pop_front().map(Ok)
+    }
+}
+
+/// Orders `run` so every commit comes after its children within the run,
+/// otherwise keeping the order it came in.
+fn children_first(run: Vec<Info>) -> Vec<Info> {
+    if run.len() < 2 {
+        return run;
+    }
+    let index: HashMap<ObjectId, usize> = run.iter().enumerate().map(|(i, c)| (c.id, i)).collect();
+    let mut children = vec![0usize; run.len()];
+    for commit in &run {
+        for parent in &commit.parent_ids {
+            if let Some(&p) = index.get(parent) {
+                children[p] += 1;
+            }
+        }
+    }
+    let mut free: BinaryHeap<Reverse<usize>> = (0..run.len())
+        .filter(|&i| children[i] == 0)
+        .map(Reverse)
+        .collect();
+    let mut order = Vec::with_capacity(run.len());
+    while let Some(Reverse(i)) = free.pop() {
+        order.push(i);
+        for parent in &run[i].parent_ids {
+            if let Some(&p) = index.get(parent) {
+                children[p] -= 1;
+                if children[p] == 0 {
+                    free.push(Reverse(p));
+                }
+            }
+        }
+    }
+    let mut slots: Vec<Option<Info>> = run.into_iter().map(Some).collect();
+    order.into_iter().filter_map(|i| slots[i].take()).collect()
 }
 
 /// An incrementally computed commit graph. Rows are produced on demand, so
@@ -180,18 +278,18 @@ impl Graph {
         tips.retain(|id| seen.insert(*id) && repo.find_commit(*id).is_ok());
 
         let walk = match repo.commit_graph_if_enabled().ok().flatten() {
-            Some(commit_graph) => Walk::Topo(
+            Some(commit_graph) => Walk::Topo(Box::new(
                 Builder::from_iters(repo.objects.clone(), tips, None::<Vec<ObjectId>>)
                     .sorting(Sorting::DateOrder)
                     .with_commit_graph(Some(commit_graph))
                     .build()
                     .map_err(gix_err)?,
-            ),
-            None => Walk::ByTime(
+            )),
+            None => Walk::ByTime(Box::new(TieOrdered::new(
                 Simple::new(tips, repo.objects.clone())
                     .sorting(SimpleSorting::ByCommitTime(CommitTimeOrder::NewestFirst))
                     .map_err(gix_err)?,
-            ),
+            ))),
         };
 
         Ok(Self {

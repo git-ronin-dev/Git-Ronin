@@ -52,6 +52,38 @@ fn linear_history_newest_first_in_one_lane() {
 }
 
 #[test]
+fn commits_made_in_the_same_second_come_after_their_children() {
+    let repo = TestRepo::new();
+    // Every commit at one timestamp, as a rebase or a script makes them.
+    let date = "1700000000 +0000";
+    let git = repo
+        .git
+        .clone()
+        .env("GIT_AUTHOR_DATE", date)
+        .env("GIT_COMMITTER_DATE", date);
+    let commit = |name: &str| {
+        repo.write(name, name);
+        git.run(repo.path(), ["add", name]).unwrap();
+        git.run(repo.path(), ["commit", "-q", "-m", name]).unwrap();
+    };
+    commit("one");
+    // `aaa` sorts first among the tips but is the oldest of them.
+    repo.git(&["branch", "aaa"]);
+    commit("two");
+    repo.git(&["branch", "bbb"]);
+    commit("three");
+
+    let rows = all_rows(&repo, &GraphFilter::default());
+    assert_eq!(summaries(&rows), ["three", "two", "one"]);
+    assert!(rows.iter().all(|r| r.lane == 0));
+    assert!(
+        rows[..2]
+            .iter()
+            .all(|r| r.edges.iter().any(|e| e.kind == EdgeKind::Out))
+    );
+}
+
+#[test]
 fn merge_opens_and_closes_a_lane() {
     let repo = repo_with_merge();
     let rows = all_rows(&repo, &GraphFilter::default());
