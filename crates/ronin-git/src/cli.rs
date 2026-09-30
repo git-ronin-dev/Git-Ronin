@@ -119,7 +119,7 @@ impl GitCli {
     }
 
     /// Runs git and returns how it finished, whatever its exit code.
-    pub(crate) fn run_raw<I, S>(&self, cwd: &Path, args: I) -> Result<Finished>
+    pub fn run_raw<I, S>(&self, cwd: &Path, args: I) -> Result<Finished>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
@@ -283,7 +283,7 @@ impl GitCli {
 
 /// How a git command finished.
 #[derive(Debug)]
-pub(crate) struct Finished {
+pub struct Finished {
     args: String,
     /// `None` if git was killed by a signal.
     pub code: Option<i32>,

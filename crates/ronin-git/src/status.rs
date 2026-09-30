@@ -5,7 +5,7 @@ use ts_rs::TS;
 
 use crate::detail::parse_status;
 use crate::repo::discover;
-use crate::{Error, FileStatus, GitCli, Result};
+use crate::{Error, FileStatus, GitCli, RepoInfo, Result, open_repo};
 
 /// Uncommitted changes, split the way `git status` shows them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
@@ -68,6 +68,72 @@ pub fn status(git: &GitCli, path: &Path) -> Result<WorkingStatus> {
         ],
     )?;
     Ok(parse_porcelain_v2(&output))
+}
+
+/// An at-a-glance state of a repository, for lists of many repositories.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RepoSummary {
+    pub info: RepoInfo,
+    /// The current branch's upstream, e.g. `origin/main`.
+    pub upstream: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub staged: u32,
+    /// Changed and untracked files (an untracked directory counts once).
+    pub unstaged: u32,
+    pub conflicted: u32,
+}
+
+/// Summarises the repository at `path` with one `git status`.
+pub fn summary(git: &GitCli, path: &Path) -> Result<RepoSummary> {
+    let info = open_repo(path)?;
+    let mut summary = RepoSummary {
+        info,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+        staged: 0,
+        unstaged: 0,
+        conflicted: 0,
+    };
+    if summary.info.is_bare {
+        return Ok(summary);
+    }
+    let output = git.run(
+        Path::new(&summary.info.path),
+        [
+            "--no-optional-locks",
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "-z",
+            "--untracked-files=normal",
+        ],
+    )?;
+    for header in output
+        .split('\0')
+        .filter_map(|r| r.strip_prefix("# branch."))
+    {
+        if let Some(upstream) = header.strip_prefix("upstream ") {
+            summary.upstream = Some(upstream.to_owned());
+        } else if let Some(ab) = header.strip_prefix("ab ") {
+            for part in ab.split(' ') {
+                if let Some(n) = part.strip_prefix('+') {
+                    summary.ahead = n.parse().unwrap_or(0);
+                } else if let Some(n) = part.strip_prefix('-') {
+                    summary.behind = n.parse().unwrap_or(0);
+                }
+            }
+        }
+    }
+    let status = parse_porcelain_v2(&output);
+    let count = |v: &Vec<StatusEntry>| u32::try_from(v.len()).unwrap_or(u32::MAX);
+    summary.staged = count(&status.staged);
+    summary.unstaged = count(&status.unstaged);
+    summary.conflicted = count(&status.conflicted);
+    Ok(summary)
 }
 
 /// Parses `git status --porcelain=v2 -z` records.

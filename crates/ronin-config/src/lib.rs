@@ -2,10 +2,16 @@
 //!
 //! Two TOML files live in the config directory:
 //! - `portable.toml`: preferences that make sense on any machine. This is the
-//!   part that export/import and config sync (Phase 5) will carry.
+//!   part that export/import ([`bundle`]) and config sync ([`sync`]) carry.
 //! - `local.toml`: machine-specific state such as repository paths.
 //!
 //! Secrets never go in either file; they belong in the OS keyring.
+//! [`secrets::find_secret`] guards what leaves the machine.
+
+pub mod bundle;
+pub mod merge;
+pub mod secrets;
+pub mod sync;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -28,12 +34,97 @@ pub struct Config {
     pub local: Local,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct Portable {
     pub ui: UiPrefs,
     pub git: GitPrefs,
+    /// Command id → shortcuts such as `Mod+Shift+P` (`Mod` is Ctrl, or Cmd
+    /// on macOS), separated by spaces, replacing the command's defaults.
+    /// An empty string unbinds it.
+    pub keybindings: BTreeMap<String, String>,
+    /// Identities to work as; never empty (the first is the default).
+    pub profiles: Vec<Profile>,
+}
+
+impl Default for Portable {
+    fn default() -> Self {
+        Self {
+            ui: UiPrefs::default(),
+            git: GitPrefs::default(),
+            keybindings: BTreeMap::new(),
+            profiles: vec![Profile::default()],
+        }
+    }
+}
+
+impl Portable {
+    /// The profile with `id`, else the first one.
+    pub fn profile(&self, id: &str) -> Option<&Profile> {
+        self.profiles
+            .iter()
+            .find(|p| p.id == id)
+            .or(self.profiles.first())
+    }
+}
+
+/// An identity: who commits are by, how they are signed, and which ssh key
+/// is used. Empty fields leave git's own configuration in charge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct Profile {
+    /// Stable identifier; also keys the profile's tabs in `local.toml`.
+    pub id: String,
+    pub name: String,
+    pub user_name: String,
+    pub user_email: String,
+    /// `user.signingKey`: a key id, or for ssh signing a public key path.
+    pub signing_key: String,
+    pub signing_format: SigningFormat,
+    /// Sign every commit and annotated tag; off leaves git's config in charge.
+    pub sign_commits: bool,
+    /// Private key file for ssh remotes (`core.sshCommand`).
+    pub ssh_key: String,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        Self {
+            id: DEFAULT_PROFILE.into(),
+            name: "Default".into(),
+            user_name: String::new(),
+            user_email: String::new(),
+            signing_key: String::new(),
+            signing_format: SigningFormat::Openpgp,
+            sign_commits: false,
+            ssh_key: String::new(),
+        }
+    }
+}
+
+impl Profile {
+    /// Whether the profile changes anything about how git runs.
+    pub fn overrides_git(&self) -> bool {
+        !(self.user_name.is_empty()
+            && self.user_email.is_empty()
+            && self.signing_key.is_empty()
+            && !self.sign_commits
+            && self.ssh_key.is_empty())
+    }
+}
+
+pub const DEFAULT_PROFILE: &str = "default";
+
+/// `gpg.format`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum SigningFormat {
+    Openpgp,
+    Ssh,
+    X509,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -97,13 +188,79 @@ pub enum DiffView {
 pub struct Local {
     /// Most recently opened first.
     pub recent_repos: Vec<String>,
+    /// Tabs of the active profile.
     pub open_tabs: Vec<String>,
     pub active_tab: Option<String>,
     /// Per-repository state, keyed by repository path.
     pub repos: BTreeMap<String, RepoState>,
+    /// Id of the profile in use; an unknown id means the first profile.
+    pub active_profile: String,
+    /// Tabs of the other profiles, keyed by profile id.
+    pub profile_tabs: BTreeMap<String, Tabs>,
+    /// Named groups of repositories.
+    pub workspaces: Vec<Workspace>,
+    /// Where the portable settings are synced to, if anywhere.
+    pub sync: Option<SyncSettings>,
+    /// Shell for the terminal panel; empty means the platform default.
+    pub terminal_shell: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct Tabs {
+    pub open_tabs: Vec<String>,
+    pub active_tab: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct Workspace {
+    pub name: String,
+    /// Repository paths, in the order shown.
+    pub repos: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct SyncSettings {
+    /// A private repository the user owns.
+    pub remote: String,
+    pub branch: String,
+    /// Push committed changes this often (they are also pushed on exit).
+    pub push_minutes: u32,
+}
+
+impl Default for SyncSettings {
+    fn default() -> Self {
+        Self {
+            remote: String::new(),
+            branch: "main".into(),
+            push_minutes: 5,
+        }
+    }
 }
 
 impl Local {
+    /// Switches to profile `id`, keeping the current tabs for when the
+    /// previous profile comes back.
+    pub fn switch_profile(&mut self, id: &str) {
+        if self.active_profile == id {
+            return;
+        }
+        let previous = Tabs {
+            open_tabs: std::mem::take(&mut self.open_tabs),
+            active_tab: self.active_tab.take(),
+        };
+        let old = std::mem::replace(&mut self.active_profile, id.to_owned());
+        self.profile_tabs.insert(old, previous);
+        let next = self.profile_tabs.remove(id).unwrap_or_default();
+        self.open_tabs = next.open_tabs;
+        self.active_tab = next.active_tab;
+    }
+
     /// Moves `path` to the front of the recent list.
     pub fn touch_recent(&mut self, path: &str) {
         self.recent_repos.retain(|p| p != path);
@@ -128,6 +285,12 @@ pub enum Error {
     Write { path: PathBuf, source: io::Error },
     #[error(transparent)]
     Serialize(#[from] toml::ser::Error),
+    #[error("could not read {}: {source}", path.display())]
+    Read { path: PathBuf, source: io::Error },
+    #[error("{0}")]
+    Invalid(String),
+    #[error(transparent)]
+    Git(#[from] ronin_git::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -165,9 +328,87 @@ impl ConfigStore {
         f(&mut self.config.local);
         write_atomic(&self.dir.join(LOCAL_FILE), &self.config.local)
     }
+
+    /// Switches to profile `id`, keeping the current profile's tabs for
+    /// when it comes back.
+    pub fn switch_profile(&mut self, id: &str) -> Result<()> {
+        // The saved id may be unset or stale; the tabs belong to the
+        // profile actually in use.
+        let current = self
+            .config
+            .portable
+            .profile(&self.config.local.active_profile)
+            .map(|p| p.id.clone());
+        self.update_local(|l| {
+            if let Some(current) = current {
+                l.active_profile = current;
+            }
+            l.switch_profile(id);
+        })
+    }
+
+    /// Replaces the portable settings wholesale (an import).
+    pub fn set_portable(&mut self, portable: Portable) -> Result<()> {
+        self.update_portable(|p| *p = portable)
+    }
+
+    /// Rereads `portable.toml` after something else (a sync) wrote it.
+    pub fn reload_portable(&mut self) -> Vec<String> {
+        let mut warnings = Vec::new();
+        self.config.portable = read_or_default(&self.dir.join(PORTABLE_FILE), &mut warnings);
+        warnings
+    }
+
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
 }
 
-fn read_or_default<T: DeserializeOwned + Default>(path: &Path, warnings: &mut Vec<String>) -> T {
+/// Parses portable settings, filling what's missing with defaults.
+pub fn parse_portable(text: &str) -> Result<Portable> {
+    let portable: Portable = toml::from_str(text).map_err(|e| Error::Invalid(e.to_string()))?;
+    Ok(portable.normalized())
+}
+
+impl Portable {
+    /// Keeps the invariants other code relies on: at least one profile,
+    /// unique non-empty ids.
+    pub fn normalized(mut self) -> Self {
+        let mut seen = std::collections::HashSet::new();
+        for (i, profile) in self.profiles.iter_mut().enumerate() {
+            if profile.id.is_empty() || !seen.insert(profile.id.clone()) {
+                profile.id = format!("profile-{i}");
+                seen.insert(profile.id.clone());
+            }
+        }
+        if self.profiles.is_empty() {
+            self.profiles.push(Profile::default());
+        }
+        self
+    }
+}
+
+/// Settings files fix up what a hand edit may have broken after parsing.
+trait Normalize {
+    fn normalize(self) -> Self;
+}
+
+impl Normalize for Portable {
+    fn normalize(self) -> Self {
+        self.normalized()
+    }
+}
+
+impl Normalize for Local {
+    fn normalize(self) -> Self {
+        self
+    }
+}
+
+fn read_or_default<T: DeserializeOwned + Default + Normalize>(
+    path: &Path,
+    warnings: &mut Vec<String>,
+) -> T {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return T::default(),
@@ -176,8 +417,8 @@ fn read_or_default<T: DeserializeOwned + Default>(path: &Path, warnings: &mut Ve
             return T::default();
         }
     };
-    match toml::from_str(&text) {
-        Ok(value) => value,
+    match toml::from_str::<T>(&text) {
+        Ok(value) => value.normalize(),
         Err(e) => {
             let aside = path.with_extension("toml.invalid");
             let moved = fs::rename(path, &aside).is_ok();
@@ -197,7 +438,10 @@ fn read_or_default<T: DeserializeOwned + Default>(path: &Path, warnings: &mut Ve
 
 /// Writes via a temp file and rename, so a crash never leaves a half-written file.
 fn write_atomic(path: &Path, value: &impl Serialize) -> Result<()> {
-    let text = toml::to_string_pretty(value)?;
+    write_text_atomic(path, &toml::to_string_pretty(value)?)
+}
+
+pub(crate) fn write_text_atomic(path: &Path, text: &str) -> Result<()> {
     let write_err = |source| Error::Write {
         path: path.to_owned(),
         source,
@@ -205,7 +449,7 @@ fn write_atomic(path: &Path, value: &impl Serialize) -> Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(write_err)?;
     }
-    let tmp = path.with_extension("toml.tmp");
+    let tmp = path.with_extension("tmp");
     fs::write(&tmp, text).map_err(write_err)?;
     fs::rename(&tmp, path).map_err(write_err)
 }
@@ -272,6 +516,62 @@ mod tests {
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("reset to defaults"));
         assert!(dir.path().join("local.toml.invalid").exists());
+    }
+
+    #[test]
+    fn profiles_keep_their_own_tabs() {
+        let mut local = Local {
+            open_tabs: vec!["/a".into(), "/b".into()],
+            active_tab: Some("/b".into()),
+            ..Local::default()
+        };
+        local.switch_profile("work");
+        assert!(local.open_tabs.is_empty());
+        assert_eq!(local.active_tab, None);
+        local.open_tabs.push("/w".into());
+
+        local.switch_profile("");
+        assert_eq!(local.open_tabs, ["/a", "/b"]);
+        assert_eq!(local.active_tab.as_deref(), Some("/b"));
+        local.switch_profile("work");
+        assert_eq!(local.open_tabs, ["/w"]);
+    }
+
+    #[test]
+    fn switching_from_an_unset_profile_keeps_the_default_profiles_tabs() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut store, _) = ConfigStore::load(dir.path());
+        store
+            .update_portable(|p| {
+                p.profiles.push(Profile {
+                    id: "work".into(),
+                    ..Profile::default()
+                })
+            })
+            .unwrap();
+        store
+            .update_local(|l| l.open_tabs = vec!["/mine".into()])
+            .unwrap();
+        store.switch_profile("work").unwrap();
+        assert!(store.get().local.open_tabs.is_empty());
+        store.switch_profile(DEFAULT_PROFILE).unwrap();
+        assert_eq!(store.get().local.open_tabs, ["/mine"]);
+    }
+
+    #[test]
+    fn settings_always_have_a_profile_with_a_unique_id() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("portable.toml"), "profiles = []\n").unwrap();
+        let (store, _) = ConfigStore::load(dir.path());
+        assert_eq!(store.get().portable.profiles, [Profile::default()]);
+
+        let p =
+            parse_portable("[[profiles]]\nid = \"a\"\n[[profiles]]\nid = \"a\"\n[[profiles]]\n")
+                .unwrap();
+        let ids: Vec<&str> = p.profiles.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["a", "profile-1", "default"]);
+        assert_eq!(p.profile("nope").unwrap().id, "a");
+        assert!(!p.profiles[0].overrides_git());
     }
 
     #[test]

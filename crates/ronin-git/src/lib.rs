@@ -40,7 +40,7 @@ pub use branch::{
     checkout_branch, checkout_detached, checkout_remote_branch, create_branch, delete_branch,
     move_branch, rename_branch, set_upstream,
 };
-pub use cli::{GitCli, GitVersion, MIN_GIT_VERSION, Progress};
+pub use cli::{Finished, GitCli, GitVersion, MIN_GIT_VERSION, Progress};
 pub use commit::{CommitOptions, CommitResult, commit, head_message};
 pub use conflict::{Conflict, ConflictSide, MergeChunk, Resolution, conflict, resolve_conflict};
 pub use detail::{
@@ -79,7 +79,7 @@ pub use stage::{
     LineSelection, PatchTarget, apply_lines, build_patch, discard_files, stage_files, unstage_files,
 };
 pub use stash::{StashOptions, stash_apply, stash_drop, stash_push};
-pub use status::{StatusEntry, SubmoduleChange, WorkingStatus, status};
+pub use status::{RepoSummary, StatusEntry, SubmoduleChange, WorkingStatus, status, summary};
 pub use submodule::{SubmoduleState, add_submodule, update_submodules};
 pub use tag::{create_tag, delete_tag};
 pub use worktree::{Worktree, add_worktree, list_worktrees, prune_worktrees, remove_worktree};
