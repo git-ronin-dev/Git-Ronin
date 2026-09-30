@@ -14,7 +14,15 @@ export const repoInfo: RepoInfo = {
 
 export const config: Config = {
   portable: {
-    ui: { theme: "dark", showAvatars: false, diffView: "unified", ignoreWhitespace: false },
+    ui: {
+      theme: "dark",
+      showAvatars: false,
+      diffView: "unified",
+      ignoreWhitespace: false,
+      fileTree: false,
+      graphWidth: 0,
+      terminalFontSize: 13,
+    },
     git: { autoFetchMinutes: 0 },
     keybindings: {},
     profiles: [

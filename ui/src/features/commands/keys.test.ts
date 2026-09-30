@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { eventToShortcut, formatShortcut, normalizeShortcut, parseBinding } from "./keys";
+import {
+  eventToShortcut,
+  formatShortcut,
+  normalizeShortcut,
+  parseBinding,
+  reachesAppFromTerminal,
+} from "./keys";
 
 const press = (code: string, mods: Partial<KeyboardEvent> = {}) => ({
   code,
@@ -37,5 +43,14 @@ describe("shortcuts", () => {
     expect(formatShortcut("Mod+Shift+Z", false)).toBe("Ctrl+Shift+Z");
     expect(formatShortcut("Mod+Shift+Z", true)).toBe("⇧⌘Z");
     expect(formatShortcut("Alt+Up", false)).toBe("Alt+↑");
+  });
+
+  it("leaves shell keys to the terminal", () => {
+    expect(reachesAppFromTerminal("Mod+W", false)).toBe(false);
+    expect(reachesAppFromTerminal("Mod+R", false)).toBe(false);
+    expect(reachesAppFromTerminal("Mod+Shift+P", false)).toBe(true);
+    expect(reachesAppFromTerminal("Mod+`", false)).toBe(true);
+    expect(reachesAppFromTerminal("Mod+W", true)).toBe(true);
+    expect(reachesAppFromTerminal("Ctrl+R", true)).toBe(false);
   });
 });

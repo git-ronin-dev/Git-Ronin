@@ -31,6 +31,8 @@ const OPERATIONS: Record<Operation, string> = {
 };
 
 const summaryKey = (path: string) => ["summary", path] as const;
+/** How often open workspace rows re-read their status. */
+const REFRESH_MS = 20_000;
 /** Repositories fetched at the same time by "Fetch all". */
 const PARALLEL_FETCHES = 3;
 
@@ -170,6 +172,8 @@ function WorkspaceView({
       queryKey: summaryKey(path),
       queryFn: () => ipc.repoSummary(path),
       retry: false,
+      // Kept current while the dialog is open.
+      refetchInterval: REFRESH_MS,
     })),
   });
 

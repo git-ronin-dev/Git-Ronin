@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { Theme } from "../../bindings/Theme";
 import type { UiPrefs } from "../../bindings/UiPrefs";
+import { Button } from "../../ui/Button";
 import { Checkbox, Field, Select, TextInput } from "../../ui/Field";
 import { useConfig, useSetUiPrefs, useUiPrefs } from "../workspace/queries";
 import { useSetGitPrefs, useSetTerminalShell } from "./queries";
@@ -38,6 +39,28 @@ export function GeneralSettings() {
           Otherwise authors show as initials.
         </p>
       </div>
+      <Field label="Graph column" hint="Or drag the edge of the graph's column header.">
+        <div className="flex items-center gap-2">
+          <span className="text-fg">
+            {prefs.graphWidth > 0 ? `${prefs.graphWidth} px wide` : "Fits the branch lanes"}
+          </span>
+          {prefs.graphWidth > 0 && (
+            <Button variant="ghost" onClick={() => set({ graphWidth: 0 })}>
+              Fit the lanes
+            </Button>
+          )}
+        </div>
+      </Field>
+      <Field label="Terminal font size">
+        <CommitInput
+          key={prefs.terminalFontSize}
+          value={String(prefs.terminalFontSize)}
+          inputMode="numeric"
+          className="w-24"
+          validate={(v) => /^\d{1,2}$/.test(v.trim()) && Number(v) >= 8 && Number(v) <= 32}
+          onCommit={(v) => set({ terminalFontSize: Number(v.trim()) })}
+        />
+      </Field>
       <Field
         label="Terminal shell"
         hint="The program the terminal panel runs. Empty uses your login shell (PowerShell on Windows). Kept on this machine only."
@@ -67,6 +90,17 @@ export function DiffSettings() {
           <option value="split">Side by side</option>
         </Select>
       </Field>
+      <div className="space-y-1">
+        <Checkbox
+          label="Show changed files as a folder tree"
+          checked={prefs.fileTree}
+          onChange={(fileTree) => set({ fileTree })}
+        />
+        <p className="pl-6 text-xs text-fg-faint">
+          Folders can be collapsed, and staged or unstaged as a whole. Also switchable above each
+          file list.
+        </p>
+      </div>
       <div className="space-y-1">
         <Checkbox
           label="Ignore whitespace changes"

@@ -6,4 +6,12 @@ export type UiPrefs = { theme: Theme,
 /**
  * Fetch author avatars from Gravatar (sends a hash of the email address).
  */
-showAvatars: boolean, diffView: DiffView, ignoreWhitespace: boolean, };
+showAvatars: boolean, diffView: DiffView, ignoreWhitespace: boolean, 
+/**
+ * Changed files as a folder tree rather than a flat list.
+ */
+fileTree: boolean, 
+/**
+ * Width of the graph column in pixels; 0 sizes it to the lanes.
+ */
+graphWidth: number, terminalFontSize: number, };

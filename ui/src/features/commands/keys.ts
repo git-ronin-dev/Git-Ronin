@@ -108,3 +108,15 @@ export function formatShortcut(shortcut: string, mac = IS_MAC): string {
   }
   return [...parts.map((m) => (m === "Mod" ? "Ctrl" : m)), shownKey].join("+");
 }
+
+/**
+ * Whether a key press in the terminal goes to the app rather than the
+ * shell. Shells use most Ctrl keys (Ctrl+W, Ctrl+R, Ctrl+P, …), so off
+ * macOS only Ctrl+Shift shortcuts and the terminal toggle get through, as
+ * in other terminal emulators; on macOS Cmd never reaches a shell.
+ */
+export function reachesAppFromTerminal(shortcut: string, mac = IS_MAC): boolean {
+  if (shortcut === "Mod+`" || shortcut === "Ctrl+`") return true;
+  const mods = shortcut.split("+").slice(0, -1);
+  return mac ? mods.includes("Mod") : mods.includes("Mod") && mods.includes("Shift");
+}

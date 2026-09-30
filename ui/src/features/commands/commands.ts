@@ -7,6 +7,7 @@ import type { Refs } from "../../bindings/Refs";
 import type { RepoInfo } from "../../bindings/RepoInfo";
 import type { SyncStatus } from "../../bindings/SyncStatus";
 import type { Theme } from "../../bindings/Theme";
+import type { UiPrefs } from "../../bindings/UiPrefs";
 import type { WorkingStatus } from "../../bindings/WorkingStatus";
 import { ipc } from "../../lib/ipc";
 import { toast } from "../../ui/toast-store";
@@ -95,21 +96,34 @@ function undoStep(ctx: CommandContext, redo: boolean) {
 
 const THEMES: Theme[] = ["dark", "light", "system"];
 
-async function cycleTheme(ctx: CommandContext) {
+/** Changes UI preferences from a command; resolves to whether they were saved. */
+async function updateUi(
+  ctx: CommandContext,
+  patch: (ui: UiPrefs) => Partial<UiPrefs>,
+): Promise<boolean> {
   const config = data<Config>(ctx, keys.config);
-  if (!config) return;
-  const ui = config.portable.ui;
-  const theme = THEMES[(THEMES.indexOf(ui.theme) + 1) % THEMES.length]!;
+  if (!config) return false;
+  const ui = { ...config.portable.ui, ...patch(config.portable.ui) };
   ctx.client.setQueryData<Config>(keys.config, {
     ...config,
-    portable: { ...config.portable, ui: { ...ui, theme } },
+    portable: { ...config.portable, ui },
   });
   try {
-    await ipc.configSetUi({ ...ui, theme });
-    toast.info(`Theme: ${theme}`);
+    await ipc.configSetUi(ui);
+    return true;
   } catch (err) {
     toast.error("Could not save settings", String(err));
+    return false;
   }
+}
+
+async function cycleTheme(ctx: CommandContext) {
+  let theme: Theme = "system";
+  const saved = await updateUi(ctx, (ui) => {
+    theme = THEMES[(THEMES.indexOf(ui.theme) + 1) % THEMES.length]!;
+    return { theme };
+  });
+  if (saved) toast.info(`Theme: ${theme}`);
 }
 
 /** Every command with a fixed id, in the order the palette lists them. */
@@ -259,6 +273,12 @@ export const COMMANDS: Command[] = [
     title: "Toggle details",
     category: "View",
     run: () => useOverlays.getState().toggleDetails(),
+  },
+  {
+    id: "view.fileTree",
+    title: "Toggle folder tree for changed files",
+    category: "View",
+    run: (ctx) => void updateUi(ctx, (ui) => ({ fileTree: !ui.fileTree })),
   },
   {
     id: "terminal.toggle",

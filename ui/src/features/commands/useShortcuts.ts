@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useConfig } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";
 import { effectiveKeys, shortcutMap } from "./commands";
-import { eventToShortcut, formatShortcut } from "./keys";
+import { eventToShortcut, formatShortcut, reachesAppFromTerminal } from "./keys";
 
 /** Each command's shortcuts, with the user's overrides applied. */
 export function useBindings(): Map<string, string[]> {
@@ -30,6 +30,7 @@ export function useShortcuts() {
       const shortcut = eventToShortcut(e);
       const command = shortcut && byShortcut.get(shortcut);
       if (!command) return;
+      if (inTerminal(e.target) && !reachesAppFromTerminal(shortcut)) return;
       // Text fields keep their own keys (undo, …) unless the command says otherwise.
       if (!command.inInput && isEditing(e.target)) return;
       if (!command.inDialog && dialogOpen()) return;
@@ -45,6 +46,10 @@ export function useShortcuts() {
 
 export function isEditing(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && !!target.closest("input, textarea, [contenteditable]");
+}
+
+function inTerminal(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && !!target.closest("[data-terminal]");
 }
 
 function dialogOpen(): boolean {

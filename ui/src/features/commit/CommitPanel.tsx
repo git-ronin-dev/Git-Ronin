@@ -8,6 +8,7 @@ import { revealCommit } from "../graph/reveal";
 import { useUiPrefs } from "../workspace/queries";
 import { updateView, useRepoView } from "../workspace/view";
 import { FileList, Stats } from "./FileList";
+import { FileLayoutToggle } from "./FileTreeParts";
 import { useCommitDetail } from "./queries";
 
 export function CommitPanel({ repo }: { repo: string }) {
@@ -72,7 +73,10 @@ export function CommitPanel({ repo }: { repo: string }) {
         <span>
           {d.files.length} {d.files.length === 1 ? "file" : "files"} changed
         </span>
-        <Stats file={{ additions, deletions }} />
+        <span className="flex items-center gap-2">
+          <Stats file={{ additions, deletions }} />
+          <FileLayoutToggle />
+        </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">
         {d.filesError && (

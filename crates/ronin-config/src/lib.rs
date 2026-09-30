@@ -152,6 +152,11 @@ pub struct UiPrefs {
     pub show_avatars: bool,
     pub diff_view: DiffView,
     pub ignore_whitespace: bool,
+    /// Changed files as a folder tree rather than a flat list.
+    pub file_tree: bool,
+    /// Width of the graph column in pixels; 0 sizes it to the lanes.
+    pub graph_width: u32,
+    pub terminal_font_size: u32,
 }
 
 impl Default for UiPrefs {
@@ -161,6 +166,9 @@ impl Default for UiPrefs {
             show_avatars: true,
             diff_view: DiffView::Unified,
             ignore_whitespace: false,
+            file_tree: false,
+            graph_width: 0,
+            terminal_font_size: 13,
         }
     }
 }

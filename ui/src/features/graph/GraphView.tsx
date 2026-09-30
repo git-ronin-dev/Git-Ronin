@@ -14,7 +14,7 @@ import { shortRev, useGitActions, type GitActions } from "../ops/actions";
 import { dropProps, useDrag } from "../ops/drag";
 import { commitMenu, type RepoContext } from "../ops/menus";
 import { useRepoContext } from "../ops/queries";
-import { keys, useRepoInfo, useUiPrefs } from "../workspace/queries";
+import { keys, useRepoInfo, useSetUiPrefs, useUiPrefs } from "../workspace/queries";
 import { WORKING_COPY, updateView, useRepoView, type Search } from "../workspace/view";
 import { LANE_WIDTH, ROW_HEIGHT } from "./geometry";
 import { GraphLanes } from "./GraphLanes";
@@ -28,11 +28,16 @@ import { WorkingRow } from "./WorkingRow";
 const MAX_VISIBLE_LANES = 12;
 /** Room for the column header. */
 const MIN_GRAPH_WIDTH = 64;
+const MAX_GRAPH_WIDTH = 640;
 
 export function GraphView({ repo }: { repo: string }) {
   const client = useQueryClient();
   const view = useRepoView(repo);
-  const showAvatars = useUiPrefs()?.showAvatars ?? false;
+  const prefs = useUiPrefs();
+  const setPrefs = useSetUiPrefs();
+  const showAvatars = prefs?.showAvatars ?? false;
+  // While the column edge is being dragged.
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState({ first: 0, last: 60 });
   const rows = useGraphRows(repo, range.first, range.last);
@@ -111,7 +116,33 @@ export function GraphView({ repo }: { repo: string }) {
   };
 
   const lanes = Math.min(Math.max(rows.maxLanes, 1), MAX_VISIBLE_LANES);
-  const graphWidth = Math.max(lanes * LANE_WIDTH + 8, MIN_GRAPH_WIDTH);
+  const autoWidth = Math.max(lanes * LANE_WIDTH + 8, MIN_GRAPH_WIDTH);
+  const graphWidth = dragWidth ?? (prefs?.graphWidth ? clampWidth(prefs.graphWidth) : autoWidth);
+
+  /** Drags the graph column's right edge; the width is saved on release. */
+  const startResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !prefs) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startWidth = graphWidth;
+    let width = startWidth;
+    const move = (ev: PointerEvent) => {
+      width = clampWidth(startWidth + ev.clientX - startX);
+      setDragWidth(width);
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      setDragWidth(null);
+      if (width !== startWidth) setPrefs.mutate({ ...prefs, graphWidth: width });
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  };
   const select = useCallback(
     (oid: string) => updateView(repo, { selected: oid, openFile: null }),
     [repo],
@@ -133,8 +164,20 @@ export function GraphView({ repo }: { repo: string }) {
         />
       )}
       <div className="flex h-7 shrink-0 items-center border-b border-line text-[11px] font-semibold tracking-wide text-fg-faint uppercase">
-        <div style={{ width: graphWidth }} className="shrink-0 px-2">
+        <div style={{ width: graphWidth }} className="relative h-full shrink-0 px-2 leading-7">
           Graph
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the graph column"
+            title="Drag to resize; double-click to fit the lanes"
+            onPointerDown={startResize}
+            onDoubleClick={() => prefs && setPrefs.mutate({ ...prefs, graphWidth: 0 })}
+            className={clsx(
+              "absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize after:absolute after:inset-y-1 after:left-1 after:w-px hover:after:bg-accent",
+              dragWidth !== null && "after:bg-accent",
+            )}
+          />
         </div>
         <div className="flex-1 px-2">Description</div>
         <div className="hidden w-44 px-2 @2xl:block">Author</div>
@@ -196,6 +239,10 @@ export function GraphView({ repo }: { repo: string }) {
       </div>
     </div>
   );
+}
+
+function clampWidth(width: number): number {
+  return Math.round(Math.min(Math.max(width, MIN_GRAPH_WIDTH), MAX_GRAPH_WIDTH));
 }
 
 function useSearch(repo: string, search: Search | null) {

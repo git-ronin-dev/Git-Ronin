@@ -3,6 +3,9 @@ import { clsx } from "clsx";
 import type { FileChange } from "../../bindings/FileChange";
 import type { FileStatus } from "../../bindings/FileStatus";
 import { ContextMenu, type MenuItem } from "../../ui/ContextMenu";
+import { useUiPrefs } from "../workspace/queries";
+import { indent, treeRows, useCollapsed, type TreeRow } from "./fileTree";
+import { FolderRow } from "./FileTreeParts";
 import { splitPath } from "./lines";
 
 const badges: Record<FileStatus, [string, string]> = {
@@ -26,17 +29,31 @@ interface FileListProps {
 }
 
 export function FileList({ files, activePath, onOpen, menu }: FileListProps) {
+  const tree = useUiPrefs()?.fileTree ?? false;
+  const [collapsed, toggle] = useCollapsed();
+  const rows: TreeRow<FileChange>[] = tree
+    ? treeRows(files, (f) => f.path, collapsed)
+    : files.map((item) => ({ kind: "file", item, name: item.path, depth: 0 }));
+
   return (
-    <ul role="listbox" aria-label="Changed files">
-      {files.map((file) => {
-        const [dir, name] = splitPath(file.path);
+    <ul role={tree ? "tree" : "listbox"} aria-label="Changed files">
+      {rows.map((row) => {
+        if (row.kind === "dir")
+          return (
+            <li key={`dir:${row.path}`}>
+              <FolderRow row={row} onToggle={() => toggle(row.path)} />
+            </li>
+          );
+        const file = row.item;
+        const [dir, name] = tree ? ["", row.name] : splitPath(file.path);
         const button = (
           <button
             type="button"
-            role="option"
+            role={tree ? "treeitem" : "option"}
             aria-selected={file.path === activePath}
             title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
             onClick={() => onOpen(file)}
+            style={tree ? { paddingLeft: indent(row.depth) + 6 } : undefined}
             className={clsx(
               "flex h-7 w-full items-center gap-2 px-3 text-left",
               file.path === activePath ? "bg-accent/20" : "hover:bg-hover",

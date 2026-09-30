@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { StatusEntry } from "../../bindings/StatusEntry";
 import { Button } from "../../ui/Button";
+import { FileLayoutToggle } from "../commit/FileTreeParts";
 import { updateView, useRepoView } from "../workspace/view";
 import { ChangeList, type Side } from "./ChangeList";
 import { CommitComposer } from "./CommitComposer";
@@ -45,11 +46,14 @@ export function ChangesPanel({ repo }: { repo: string }) {
     <div className="flex h-full flex-col">
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-line px-3">
         <h2 className="font-semibold">Uncommitted changes</h2>
-        {s && (
-          <span className="text-xs text-fg-muted">
-            {total === 0 ? "Working tree clean" : `${total} ${total === 1 ? "file" : "files"}`}
-          </span>
-        )}
+        <span className="flex items-center gap-2">
+          {s && (
+            <span className="text-xs text-fg-muted">
+              {total === 0 ? "Working tree clean" : `${total} ${total === 1 ? "file" : "files"}`}
+            </span>
+          )}
+          <FileLayoutToggle />
+        </span>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {s && s.conflicted.length > 0 && (

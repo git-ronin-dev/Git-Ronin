@@ -8,7 +8,10 @@ import { useGitActions } from "../ops/actions";
 import { useLfsStatus } from "../ops/queries";
 import { updateView } from "../workspace/view";
 import { Badge } from "../commit/FileList";
+import { indent, treeRows, useCollapsed, type TreeRow } from "../commit/fileTree";
+import { FolderRow } from "../commit/FileTreeParts";
 import { splitPath } from "../commit/lines";
+import { useUiPrefs } from "../workspace/queries";
 import { ignoreChoices } from "./ignore";
 import { useWorkingActions } from "./queries";
 
@@ -29,21 +32,42 @@ export function ChangeList({ repo, side, entries, activePath, onOpen }: ChangeLi
   const actions = useWorkingActions(repo);
   const git = useGitActions(repo);
   const lfs = useLfsStatus(repo).data;
+  const tree = useUiPrefs()?.fileTree ?? false;
+  const [collapsed, toggle] = useCollapsed();
   const shown = entries.slice(0, MAX_SHOWN);
+  const rows: TreeRow<StatusEntry>[] = tree
+    ? treeRows(shown, (e) => e.path, collapsed)
+    : shown.map((item) => ({ kind: "file", item, name: item.path, depth: 0 }));
+
+  /** The row buttons, for one file or everything in a folder. */
+  const buttonsFor = (
+    targets: StatusEntry[],
+  ): { icon: LucideIcon; label: string; run: () => void }[] =>
+    side === "unstaged"
+      ? [
+          { icon: Undo2, label: "Discard changes", run: () => void actions.discard(targets) },
+          { icon: Plus, label: "Stage", run: () => void actions.stage(targets) },
+        ]
+      : side === "staged"
+        ? [{ icon: Minus, label: "Unstage", run: () => void actions.unstage(targets) }]
+        : [{ icon: Check, label: "Mark resolved", run: () => void actions.stage(targets) }];
 
   return (
-    <ul role="listbox" aria-label={`${side} files`}>
-      {shown.map((entry) => {
-        const [dir, name] = splitPath(entry.path);
-        const buttons: { icon: LucideIcon; label: string; run: () => void }[] =
-          side === "unstaged"
-            ? [
-                { icon: Undo2, label: "Discard changes", run: () => void actions.discard([entry]) },
-                { icon: Plus, label: "Stage", run: () => void actions.stage([entry]) },
-              ]
-            : side === "staged"
-              ? [{ icon: Minus, label: "Unstage", run: () => void actions.unstage([entry]) }]
-              : [{ icon: Check, label: "Mark resolved", run: () => void actions.stage([entry]) }];
+    <ul role={tree ? "tree" : "listbox"} aria-label={`${side} files`}>
+      {rows.map((row) => {
+        if (row.kind === "dir")
+          return (
+            <li key={`dir:${row.path}`}>
+              <FolderRow
+                row={row}
+                onToggle={() => toggle(row.path)}
+                actions={<RowButtons buttons={buttonsFor(row.items)} what={`${row.path}/`} />}
+              />
+            </li>
+          );
+        const entry = row.item;
+        const [dir, name] = tree ? ["", row.name] : splitPath(entry.path);
+        const buttons = buttonsFor([entry]);
 
         const tracked = entry.status !== "untracked" && entry.status !== "added";
         const menu: MenuItem[] = [
@@ -89,8 +113,9 @@ export function ChangeList({ repo, side, entries, activePath, onOpen }: ChangeLi
           <li key={entry.path}>
             <ContextMenu items={menu}>
               <div
-                role="option"
+                role={tree ? "treeitem" : "option"}
                 tabIndex={0}
+                style={tree ? { paddingLeft: indent(row.depth) + 6 } : undefined}
                 aria-selected={entry.path === activePath}
                 title={entry.oldPath ? `${entry.oldPath} → ${entry.path}` : entry.path}
                 onClick={() => onOpen(entry)}
@@ -105,23 +130,7 @@ export function ChangeList({ repo, side, entries, activePath, onOpen }: ChangeLi
                   <span className="text-fg-faint">{dir}</span>
                   {name}
                 </span>
-                <span className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">
-                  {buttons.map(({ icon: Icon, label, run }) => (
-                    <button
-                      key={label}
-                      type="button"
-                      aria-label={`${label} ${entry.path}`}
-                      title={label}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        run();
-                      }}
-                      className="flex size-5 items-center justify-center rounded-sm text-fg-muted hover:bg-raised hover:text-fg"
-                    >
-                      <Icon className="size-3.5" />
-                    </button>
-                  ))}
-                </span>
+                <RowButtons buttons={buttons} what={entry.path} />
               </div>
             </ContextMenu>
           </li>
@@ -133,5 +142,34 @@ export function ChangeList({ repo, side, entries, activePath, onOpen }: ChangeLi
         </li>
       )}
     </ul>
+  );
+}
+
+/** Hover buttons on a file or folder row. */
+function RowButtons({
+  buttons,
+  what,
+}: {
+  buttons: { icon: LucideIcon; label: string; run: () => void }[];
+  what: string;
+}) {
+  return (
+    <span className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">
+      {buttons.map(({ icon: Icon, label, run }) => (
+        <button
+          key={label}
+          type="button"
+          aria-label={`${label} ${what}`}
+          title={label}
+          onClick={(e) => {
+            e.stopPropagation();
+            run();
+          }}
+          className="flex size-5 items-center justify-center rounded-sm text-fg-muted hover:bg-raised hover:text-fg"
+        >
+          <Icon className="size-3.5" />
+        </button>
+      ))}
+    </span>
   );
 }
