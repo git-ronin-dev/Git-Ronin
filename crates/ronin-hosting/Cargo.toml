@@ -1,0 +1,16 @@
+[package]
+name = "ronin-hosting"
+description = "Hosting service integrations for Git Ronin: GitHub, GitLab, Bitbucket, Azure DevOps and Jira."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+percent-encoding = "2"
+ronin-config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ts-rs.workspace = true
+ureq = { version = "3", features = ["json", "platform-verifier"] }

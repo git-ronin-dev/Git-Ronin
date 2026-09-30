@@ -8,6 +8,7 @@
 //! Secrets never go in either file; they belong in the OS keyring.
 //! [`secrets::find_secret`] guards what leaves the machine.
 
+pub mod accounts;
 pub mod bundle;
 pub mod merge;
 pub mod secrets;
@@ -21,6 +22,8 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+pub use accounts::{Account, ProviderKind};
 
 const PORTABLE_FILE: &str = "portable.toml";
 const LOCAL_FILE: &str = "local.toml";
@@ -211,6 +214,9 @@ pub struct Local {
     pub sync: Option<SyncSettings>,
     /// Shell for the terminal panel; empty means the platform default.
     pub terminal_shell: String,
+    /// Accounts on hosting services, each belonging to a profile. Tokens
+    /// are in the OS keyring, so accounts stay on this machine.
+    pub accounts: Vec<Account>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

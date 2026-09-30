@@ -5,8 +5,12 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use ronin_config::{ConfigStore, Portable};
 use ronin_git::{GitCli, Graph, GraphFilter, Journal, UndoStyle};
 
+use ronin_hosting::{Transport, UreqTransport};
+
 use crate::askpass::{self, Askpass};
+use crate::hosting::{Answered, DeviceFlows};
 use crate::profile::ProfileGit;
+use crate::secrets::SecretStore;
 use crate::sync::SyncService;
 use crate::terminal::Terminals;
 use crate::watcher::RepoWatcher;
@@ -28,6 +32,12 @@ pub struct AppState {
     /// credential helpers alone.
     pub askpass: Option<Arc<Askpass>>,
     pub config: Mutex<ConfigStore>,
+    /// Account tokens.
+    pub secrets: SecretStore,
+    /// How hosting services are reached.
+    pub transport: Arc<dyn Transport>,
+    pub device_flows: DeviceFlows,
+    pub answered: Answered,
     /// Problems found while loading settings, shown once by the UI.
     pub config_warnings: Mutex<Vec<String>>,
     /// Open repositories, keyed by their root path as reported by `open_repo`.
@@ -65,6 +75,10 @@ impl AppState {
             terminals: Terminals::default(),
             askpass,
             config: Mutex::new(config),
+            secrets: SecretStore::default(),
+            transport: Arc::new(UreqTransport::default()),
+            device_flows: DeviceFlows::default(),
+            answered: Answered::default(),
             config_warnings: Mutex::new(config_warnings),
             repos: Mutex::new(HashMap::new()),
         }

@@ -3,7 +3,9 @@
 
 mod askpass;
 mod commands;
+mod hosting;
 mod profile;
+mod secrets;
 mod settings;
 mod ssh;
 mod state;
@@ -25,6 +27,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             let (config, warnings) = ConfigStore::load(dir);
@@ -36,6 +39,13 @@ fn main() {
                 lock(&state.config_warnings).push(warning);
             }
             state.sync.start(app.handle().clone());
+            if let Some(askpass) = &state.askpass {
+                // Account tokens answer git's HTTPS prompts before the user is asked.
+                let handle = app.handle().clone();
+                askpass.set_resolver(Box::new(move |prompt| {
+                    handle.state::<AppState>().git_credential(prompt)
+                }));
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -66,6 +76,32 @@ fn main() {
             settings::terminal_write,
             settings::terminal_resize,
             settings::terminal_close,
+            hosting::hosting_accounts,
+            hosting::hosting_client_id,
+            hosting::hosting_sign_in,
+            hosting::hosting_device_start,
+            hosting::hosting_device_wait,
+            hosting::hosting_device_cancel,
+            hosting::hosting_sign_out,
+            hosting::hosting_move_account,
+            hosting::hosting_repos,
+            hosting::hosting_fork,
+            hosting::hosting_links,
+            hosting::hosting_pull_requests,
+            hosting::hosting_pull_request,
+            hosting::hosting_create_pull_request,
+            hosting::hosting_comment,
+            hosting::hosting_approve,
+            hosting::hosting_merge,
+            hosting::hosting_issues,
+            hosting::hosting_create_issue,
+            hosting::hosting_ci_status,
+            hosting::hosting_add_ssh_key,
+            hosting::hosting_launchpad,
+            hosting::pr_fetch,
+            hosting::range_files,
+            hosting::branch_issue,
+            hosting::set_branch_issue,
             commands::open_repo,
             commands::restore_tabs,
             commands::close_repo,

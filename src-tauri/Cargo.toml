@@ -12,14 +12,18 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 getrandom = "0.3"
 ignore = "0.4"
+keyring = "4"
 notify = "8"
 portable-pty = "0.9"
 ronin-config.workspace = true
 ronin-git.workspace = true
+ronin-hosting.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 ssh-key = { version = "0.6", features = ["ed25519", "encryption", "getrandom"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 ts-rs.workspace = true
 
 [dev-dependencies]

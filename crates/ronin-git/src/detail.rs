@@ -170,7 +170,7 @@ pub fn working_blob(path: &Path, file_path: &str, source: BlobSource) -> Result<
 }
 
 /// Parses `git diff-tree -z --raw --numstat`: all raw records, then all numstat records.
-fn parse_diff_tree(output: &str) -> Vec<FileChange> {
+pub(crate) fn parse_diff_tree(output: &str) -> Vec<FileChange> {
     let mut tokens = output.split('\0').filter(|t| !t.is_empty());
     let mut files = Vec::new();
     let mut stats: HashMap<String, (Option<u32>, Option<u32>)> = HashMap::new();

@@ -11,6 +11,7 @@ license = "GPL-3.0-or-later"
 [workspace.dependencies]
 ronin-config = { path = "crates/ronin-config" }
 ronin-git = { path = "crates/ronin-git" }
+ronin-hosting = { path = "crates/ronin-hosting" }
 gix = "0.88"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

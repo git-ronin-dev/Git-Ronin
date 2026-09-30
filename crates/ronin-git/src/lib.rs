@@ -27,6 +27,7 @@ mod lfs;
 mod refs;
 mod remote;
 mod repo;
+mod review;
 mod stage;
 mod stash;
 mod status;
@@ -75,6 +76,9 @@ pub use remote::{
     edit_remote, fetch, init, pull, push_branch, push_tag, remove_remote,
 };
 pub use repo::{HeadState, Operation, RebaseProgress, RepoInfo, git_dirs, open_repo};
+pub use review::{
+    RangeDiff, branch_issue, fetch_commits, has_commit, range_files, set_branch_issue,
+};
 pub use stage::{
     LineSelection, PatchTarget, apply_lines, build_patch, discard_files, stage_files, unstage_files,
 };
