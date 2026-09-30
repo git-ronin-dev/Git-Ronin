@@ -6,7 +6,7 @@ export type PullRequest = {
 /**
  * The target repository, as [`HostedRepo::path`].
  */
-repo: string, number: bigint, title: string, state: PrState, draft: boolean, author: Person, sourceBranch: string, targetBranch: string, 
+repo: string, number: number, title: string, state: PrState, draft: boolean, author: Person, sourceBranch: string, targetBranch: string, 
 /**
  * The repository the changes come from, when it's a fork.
  */

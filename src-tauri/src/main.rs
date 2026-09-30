@@ -40,10 +40,10 @@ fn main() {
             }
             state.sync.start(app.handle().clone());
             if let Some(askpass) = &state.askpass {
-                // Account tokens answer git's HTTPS prompts before the user is asked.
+                // Account tokens answer git over HTTPS before the user is asked.
                 let handle = app.handle().clone();
-                askpass.set_resolver(Box::new(move |prompt| {
-                    handle.state::<AppState>().git_credential(prompt)
+                askpass.set_helper(Box::new(move |action, input| {
+                    handle.state::<AppState>().credential_helper(action, input)
                 }));
             }
             Ok(())

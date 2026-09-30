@@ -44,10 +44,9 @@ pub struct DeviceFlow {
     cancelled: AtomicBool,
 }
 
-/// Password answers given to git recently, so a token git rejected isn't
-/// offered again and again.
+/// Accounts whose token git reported rejected, and when.
 #[derive(Default)]
-pub struct Answered(std::sync::Mutex<HashMap<String, Instant>>);
+pub struct Rejected(std::sync::Mutex<HashMap<String, Instant>>);
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -169,11 +168,18 @@ impl AppState {
 
     /// The account's token, renewed first if it's about to expire.
     fn credential(&self, account: &Account) -> CmdResult<Credential> {
+        let renewable = |c: &Credential| {
+            c.expiring(now()) && !account.oauth_client_id.is_empty() && !c.refresh_token.is_empty()
+        };
         let credential = self.secrets.get(&account.id)?;
-        if !credential.expiring(now())
-            || account.oauth_client_id.is_empty()
-            || credential.refresh_token.is_empty()
-        {
+        if !renewable(&credential) {
+            return Ok(credential);
+        }
+        // Refresh tokens work once: requests that find the token expiring
+        // together wait for the first to renew it.
+        let _renewing = lock(&self.renewing);
+        let credential = self.secrets.get(&account.id)?;
+        if !renewable(&credential) {
             return Ok(credential);
         }
         let renewed = oauth::refresh(
@@ -228,6 +234,7 @@ impl AppState {
             ),
         };
         let warning = self.secrets.set(&account.id, credential);
+        lock(&self.rejected.0).remove(&account.id);
         let saved = account.clone();
         config
             .update_local(|l| match l.accounts.iter_mut().find(|a| a.id == saved.id) {
@@ -238,41 +245,63 @@ impl AppState {
         Ok(SignIn { account, warning })
     }
 
-    /// The token for a git HTTPS prompt (`Username for 'https://host': `
-    /// or `Password for 'https://user@host': `), from an account of the
-    /// profile in use on that host.
-    pub fn git_credential(&self, prompt: &str) -> Option<String> {
-        let (question, url) = prompt.split_once(" for '")?;
-        let url = url.split('\'').next()?;
-        let (scheme, rest) = url.split_once("://")?;
-        let authority = rest.split('/').next()?;
-        let user = authority.rsplit_once('@').map(|(user, _)| user);
-        let host = host_of(url);
+    /// Git's credential helper protocol for account tokens: `get` answers
+    /// with the token of an account (of the profile in use) on the host;
+    /// `erase` means git found it rejected, so it isn't offered again for a
+    /// while (the user is asked instead), and `store` that it worked.
+    pub fn credential_helper(&self, action: &str, input: &str) -> Option<String> {
+        let fields: HashMap<&str, &str> = input.lines().filter_map(|l| l.split_once('=')).collect();
+        let protocol = *fields.get("protocol")?;
+        if !matches!(protocol, "https" | "http") {
+            return None;
+        }
+        let host = fields.get("host")?.to_ascii_lowercase();
+        let user = fields.get("username").copied();
         let accounts = profile_accounts(self.config().get());
         let account = accounts.into_iter().find(|a| {
             a.kind != ProviderKind::Jira
-                && host_of(&a.url) == host
-                && a.url.starts_with(&format!("{scheme}://"))
+                && a.url.starts_with(&format!("{protocol}://"))
+                && authority(&a.url) == host
                 && user.is_none_or(|u| u == git_username(a))
         })?;
-        match question.trim() {
-            "Username" => Some(git_username(&account)),
-            "Password" => {
-                let key = format!("{scheme}://{host}");
-                let mut answered = lock(&self.answered.0);
-                answered.retain(|_, at| at.elapsed() < Duration::from_secs(60));
-                // Asked again right away: git rejected the token, so let
-                // the user answer.
-                if answered.contains_key(&key) {
-                    return None;
-                }
+        let mut rejected = lock(&self.rejected.0);
+        rejected.retain(|_, at| at.elapsed() < Duration::from_secs(10 * 60));
+        let ours = || {
+            fields
+                .get("password")
+                .is_none_or(|p| self.secrets.get(&account.id).is_ok_and(|c| c.token == *p))
+        };
+        match action {
+            "get" if !rejected.contains_key(&account.id) => {
+                drop(rejected);
                 let token = self.credential(&account).ok()?.token;
-                answered.insert(key, Instant::now());
-                Some(token)
+                Some(format!(
+                    "username={}\npassword={token}\n",
+                    git_username(&account)
+                ))
+            }
+            "erase" if ours() => {
+                rejected.insert(account.id, Instant::now());
+                None
+            }
+            "store" if ours() => {
+                rejected.remove(&account.id);
+                None
             }
             _ => None,
         }
     }
+}
+
+/// `host[:port]` of a URL, lowercased.
+fn authority(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let authority = rest.split('/').next().unwrap_or_default();
+    authority
+        .rsplit('@')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase()
 }
 
 /// The user name git sends with an account's token over HTTPS.

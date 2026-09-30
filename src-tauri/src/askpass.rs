@@ -6,9 +6,13 @@
 //! that way, it connects back to the app over a localhost socket, the app
 //! shows the prompt, and the answer goes back the same way.
 //!
-//! Credential helpers configured in git still come first; this is only the
-//! fallback. The socket accepts only requests carrying a random token that
-//! is passed to git's children in the environment.
+//! The executable is also a git credential helper, appended after the
+//! user's own (so theirs still come first): it answers with the token of an
+//! account on the host, and git tells it whether the token worked. Only
+//! when no helper has a credential does git prompt through askpass.
+//!
+//! The socket accepts only requests carrying a random token that is passed
+//! to git's children in the environment.
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
@@ -49,8 +53,12 @@ struct CredentialRequest {
 /// Shows a request to the user; false if it couldn't be shown.
 type Notify = dyn Fn(CredentialRequest) -> bool + Send + Sync;
 
-/// Answers a prompt without asking the user (an account's token), if it can.
-pub type Resolver = dyn Fn(&str) -> Option<String> + Send + Sync;
+/// A git credential helper: gets the action (`get`, `store`, `erase`) and
+/// git's `key=value` lines, and for `get` may answer with its own.
+pub type Helper = dyn Fn(&str, &str) -> Option<String> + Send + Sync;
+
+/// First argument when git runs the executable as a credential helper.
+const HELPER_ARG: &str = "credential-helper";
 
 pub struct Askpass {
     addr: SocketAddr,
@@ -58,7 +66,7 @@ pub struct Askpass {
     exe: PathBuf,
     next_id: AtomicU64,
     pending: Mutex<HashMap<u64, Sender<Option<String>>>>,
-    resolver: Mutex<Option<Arc<Resolver>>>,
+    helper: Mutex<Option<Arc<Helper>>>,
 }
 
 impl Askpass {
@@ -80,7 +88,7 @@ impl Askpass {
             exe: std::env::current_exe()?,
             next_id: AtomicU64::new(1),
             pending: Mutex::new(HashMap::new()),
-            resolver: Mutex::new(None),
+            helper: Mutex::new(None),
         });
         let server = askpass.clone();
         std::thread::Builder::new()
@@ -98,21 +106,41 @@ impl Askpass {
         Ok(askpass)
     }
 
-    /// Environment that makes git and ssh prompt through the app.
-    pub fn env(&self) -> Vec<(&'static str, String)> {
+    /// Environment that makes git and ssh prompt through the app, and
+    /// adds the app as git's last credential helper.
+    pub fn env(&self) -> Vec<(String, String)> {
         let exe = self.exe.to_string_lossy().into_owned();
-        vec![
-            ("GIT_ASKPASS", exe.clone()),
-            ("SSH_ASKPASS", exe),
+        let mut env: Vec<(String, String)> = vec![
+            ("GIT_ASKPASS".into(), exe.clone()),
+            ("SSH_ASKPASS".into(), exe.clone()),
             // OpenSSH 8.4+: use the askpass program even with a terminal.
-            ("SSH_ASKPASS_REQUIRE", "force".into()),
-            (ADDR_ENV, self.addr.to_string()),
-            (TOKEN_ENV, self.token.clone()),
-        ]
+            ("SSH_ASKPASS_REQUIRE".into(), "force".into()),
+            (ADDR_ENV.into(), self.addr.to_string()),
+            (TOKEN_ENV.into(), self.token.clone()),
+        ];
+        // git 2.31+ reads extra config from the environment, after every
+        // config file; keep any the user set.
+        let count: usize = std::env::var("GIT_CONFIG_COUNT")
+            .ok()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(0);
+        let quoted = format!("'{}'", exe.replace('\'', "'\\''"));
+        env.extend([
+            ("GIT_CONFIG_COUNT".into(), (count + 1).to_string()),
+            (
+                format!("GIT_CONFIG_KEY_{count}"),
+                "credential.helper".into(),
+            ),
+            (
+                format!("GIT_CONFIG_VALUE_{count}"),
+                format!("!{quoted} {HELPER_ARG}"),
+            ),
+        ]);
+        env
     }
 
-    pub fn set_resolver(&self, resolver: Box<Resolver>) {
-        *lock(&self.resolver) = Some(resolver.into());
+    pub fn set_helper(&self, helper: Box<Helper>) {
+        *lock(&self.helper) = Some(helper.into());
     }
 
     /// Passes the user's answer (`None` if they cancelled) to the waiting prompt.
@@ -129,20 +157,22 @@ impl Askpass {
             .take(MAX_PROMPT)
             .read_to_string(&mut request)?;
         let mut parts = request.splitn(3, '\n');
-        let (Some(token), Some(background), Some(prompt)) =
-            (parts.next(), parts.next(), parts.next())
+        let (Some(token), Some(mode), Some(prompt)) = (parts.next(), parts.next(), parts.next())
         else {
             return Ok(());
         };
         if token != self.token {
             return Ok(());
         }
-        let resolver = lock(&self.resolver).clone();
-        if let Some(answer) = resolver.and_then(|r| r(prompt.trim())) {
-            return stream.write_all(format!("1\n{answer}").as_bytes());
+        if let Some(action) = mode.strip_prefix("helper:") {
+            let helper = lock(&self.helper).clone();
+            return match helper.and_then(|h| h(action, prompt)) {
+                Some(answer) => stream.write_all(format!("1\n{answer}").as_bytes()),
+                None => stream.write_all(b"0\n"),
+            };
         }
         // Background commands never interrupt the user.
-        if background == "1" {
+        if mode == "1" {
             return stream.write_all(b"0\n");
         }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
@@ -173,11 +203,25 @@ impl Askpass {
 /// When git or ssh started this executable as its askpass program, answers
 /// the prompt and returns the exit code; otherwise `None`.
 pub fn client() -> Option<i32> {
+    let mut args = std::env::args().skip(1);
+    let first = args.next().unwrap_or_default();
+    if first == HELPER_ARG {
+        // Never start the app from here, whatever happens.
+        let (Ok(addr), Ok(token)) = (std::env::var(ADDR_ENV), std::env::var(TOKEN_ENV)) else {
+            return Some(0);
+        };
+        let action = args.next().unwrap_or_default();
+        let mut input = String::new();
+        let _ = io::stdin().take(MAX_PROMPT).read_to_string(&mut input);
+        if let Ok(Some(answer)) = send(&addr, &token, &format!("helper:{action}"), &input) {
+            print!("{answer}");
+        }
+        return Some(0);
+    }
     let addr = std::env::var(ADDR_ENV).ok()?;
     let token = std::env::var(TOKEN_ENV).ok()?;
     let background = std::env::var_os(BACKGROUND_ENV).is_some();
-    let prompt = std::env::args().nth(1).unwrap_or_default();
-    Some(match ask(&addr, &token, background, &prompt) {
+    Some(match ask(&addr, &token, background, &first) {
         Ok(Some(answer)) => {
             println!("{answer}");
             0
@@ -187,9 +231,12 @@ pub fn client() -> Option<i32> {
 }
 
 fn ask(addr: &str, token: &str, background: bool, prompt: &str) -> io::Result<Option<String>> {
+    send(addr, token, if background { "1" } else { "0" }, prompt)
+}
+
+fn send(addr: &str, token: &str, mode: &str, body: &str) -> io::Result<Option<String>> {
     let mut stream = TcpStream::connect(addr)?;
-    let background = u8::from(background);
-    stream.write_all(format!("{token}\n{background}\n{prompt}").as_bytes())?;
+    stream.write_all(format!("{token}\n{mode}\n{body}").as_bytes())?;
     stream.shutdown(std::net::Shutdown::Write)?;
     let mut reply = String::new();
     stream.read_to_string(&mut reply)?;
@@ -232,12 +279,20 @@ mod tests {
         assert_eq!(ask(&addr, "nope", false, prompt).unwrap(), None);
         // In the background nobody is asked…
         assert_eq!(ask(&addr, &askpass.token, true, prompt).unwrap(), None);
-        // …but a resolver may still answer.
-        askpass.set_resolver(Box::new(|p| p.contains("known").then(|| "tok".to_owned())));
-        let known = "Password for 'https://known.example': ";
+        // …and the credential helper answers from its own knowledge.
+        askpass.set_helper(Box::new(|action, input| {
+            (action == "get" && input.contains("host=known.example"))
+                .then(|| "username=me\npassword=tok\n".to_owned())
+        }));
+        let get = |input: &str| send(&addr, &askpass.token, "helper:get", input).unwrap();
         assert_eq!(
-            ask(&addr, &askpass.token, true, known).unwrap().as_deref(),
-            Some("tok")
+            get("protocol=https\nhost=known.example\n").as_deref(),
+            Some("username=me\npassword=tok\n")
+        );
+        assert_eq!(get("protocol=https\nhost=other.example\n"), None);
+        assert_eq!(
+            send(&addr, "nope", "helper:get", "host=known.example").unwrap(),
+            None
         );
 
         let seen = lock(&seen);

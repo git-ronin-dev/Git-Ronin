@@ -8,7 +8,7 @@ use ronin_git::{GitCli, Graph, GraphFilter, Journal, UndoStyle};
 use ronin_hosting::{Transport, UreqTransport};
 
 use crate::askpass::{self, Askpass};
-use crate::hosting::{Answered, DeviceFlows};
+use crate::hosting::{DeviceFlows, Rejected};
 use crate::profile::ProfileGit;
 use crate::secrets::SecretStore;
 use crate::sync::SyncService;
@@ -37,7 +37,9 @@ pub struct AppState {
     /// How hosting services are reached.
     pub transport: Arc<dyn Transport>,
     pub device_flows: DeviceFlows,
-    pub answered: Answered,
+    pub rejected: Rejected,
+    /// Held while an expiring token is renewed.
+    pub renewing: Mutex<()>,
     /// Problems found while loading settings, shown once by the UI.
     pub config_warnings: Mutex<Vec<String>>,
     /// Open repositories, keyed by their root path as reported by `open_repo`.
@@ -78,7 +80,8 @@ impl AppState {
             secrets: SecretStore::default(),
             transport: Arc::new(UreqTransport::default()),
             device_flows: DeviceFlows::default(),
-            answered: Answered::default(),
+            rejected: Rejected::default(),
+            renewing: Mutex::new(()),
             config_warnings: Mutex::new(config_warnings),
             repos: Mutex::new(HashMap::new()),
         }

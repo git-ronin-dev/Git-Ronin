@@ -86,14 +86,26 @@ pub fn start(
 ) -> Result<DeviceCode> {
     let endpoints = endpoints(kind, url)?;
     let api = Api::anonymous(transport, "");
-    let answer = api
-        .send_form(
-            &endpoints.device,
-            &[("client_id", client_id), ("scope", endpoints.scope)],
-        )?
-        .json()?;
-    if let Some(error) = oauth_error(&answer) {
-        return Err(error);
+    let response = api.form_unchecked(
+        &endpoints.device,
+        &[("client_id", client_id), ("scope", endpoints.scope)],
+    )?;
+    let answer = response.json().unwrap_or_default();
+    match answer.opt("/error").as_deref() {
+        // GitLab: device sign-in is off for the application (or the server).
+        Some("access_denied") => {
+            return Err(Error::Invalid(
+                "the service refused device sign-in for this OAuth application; enable the \
+                 device flow for it (on GitLab, an administrator may also need to turn on \
+                 device authorization)"
+                    .into(),
+            ));
+        }
+        Some(_) => return Err(oauth_error(&answer).expect("an error field is present")),
+        None if response.status >= 300 => {
+            return Err(crate::http::status_error(&response, &endpoints.device));
+        }
+        None => {}
     }
     let code = DeviceCode {
         device_code: answer.s("/device_code"),

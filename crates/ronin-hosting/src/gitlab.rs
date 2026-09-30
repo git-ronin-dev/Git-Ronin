@@ -243,8 +243,18 @@ impl Provider for GitLab {
             },
             _ => Some(false),
         };
+        let mut pr = mr(&v, Some(path));
+        if pr.source_repo.is_some() {
+            // The list only has the fork's id; name it.
+            let fork = self
+                .api
+                .get(&format!("/projects/{}", v.n("/source_project_id")))
+                .ok()
+                .and_then(|p| p.opt("/path_with_namespace"));
+            pr.source_repo = fork.or(pr.source_repo);
+        }
         Ok(PullRequestDetail {
-            pr: mr(&v, Some(path)),
+            pr,
             body: v.s("/description"),
             head_sha: v.opt("/diff_refs/head_sha").or_else(|| v.opt("/sha")),
             base_sha: v.opt("/diff_refs/base_sha"),

@@ -140,6 +140,7 @@ pub enum PrState {
 pub struct PullRequest {
     /// The target repository, as [`HostedRepo::path`].
     pub repo: String,
+    #[ts(type = "number")]
     pub number: u64,
     pub title: String,
     pub state: PrState,
@@ -465,31 +466,6 @@ pub fn normalize_url(kind: ProviderKind, url: &str) -> Result<String> {
     Ok(url)
 }
 
-/// A branch name for starting work on an issue: `12-fix-the-login-page`
-/// or `PROJ-12-fix-the-login-page`.
-pub fn issue_branch_name(issue: &Issue) -> String {
-    let key = issue.key.trim_start_matches('#');
-    let mut slug = String::new();
-    for word in issue
-        .title
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-    {
-        if slug.len() + word.len() > 40 {
-            break;
-        }
-        if !slug.is_empty() {
-            slug.push('-');
-        }
-        slug.push_str(&word.to_lowercase());
-    }
-    if slug.is_empty() {
-        key.to_owned()
-    } else {
-        format!("{key}-{slug}")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,32 +513,5 @@ mod tests {
         assert!(n(ProviderKind::AzureDevops, "dev.azure.com").is_err());
         assert!(n(ProviderKind::AzureDevops, "https://dev.azure.com/contoso").is_ok());
         assert!(n(ProviderKind::Github, "ftp://x").is_err());
-    }
-
-    #[test]
-    fn names_branches_after_issues() {
-        let issue = |key: &str, title: &str| Issue {
-            repo: String::new(),
-            key: key.into(),
-            number: 0,
-            title: title.into(),
-            open: true,
-            author: None,
-            labels: vec![],
-            web_url: String::new(),
-            updated: 0,
-        };
-        assert_eq!(
-            issue_branch_name(&issue("#12", "Fix the login page!")),
-            "12-fix-the-login-page"
-        );
-        assert_eq!(
-            issue_branch_name(&issue(
-                "PROJ-7",
-                "Crash when opening a very very long file name"
-            )),
-            "PROJ-7-crash-when-opening-a-very-very-long-file"
-        );
-        assert_eq!(issue_branch_name(&issue("#3", "…")), "3");
     }
 }
