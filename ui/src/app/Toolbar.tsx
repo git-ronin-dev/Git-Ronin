@@ -4,7 +4,7 @@ import type { PullMode } from "../bindings/PullMode";
 import { countChanges, useWorkingStatus } from "../features/changes/queries";
 import { useShortcutLabel } from "../features/commands/useShortcuts";
 import { PULL_LABELS, useGitActions } from "../features/ops/actions";
-import { openDialog } from "../features/ops/dialogs";
+import { openDialog } from "../features/ops/dialog-store";
 import { useJournal } from "../features/ops/queries";
 import { useTask } from "../features/ops/tasks";
 import { describeHead } from "../features/repo/head";

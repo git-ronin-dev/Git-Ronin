@@ -15,7 +15,7 @@ import { ipc } from "../../lib/ipc";
 import { toast } from "../../ui/toast-store";
 import { countChanges } from "../changes/queries";
 import { gitActions, PULL_LABELS } from "../ops/actions";
-import { openDialog } from "../ops/dialogs";
+import { openDialog } from "../ops/dialog-store";
 import { describeHead } from "../repo/head";
 import { exportSettings, importSettings, syncKeys } from "../settings/queries";
 import { checkForUpdates } from "../updates/store";

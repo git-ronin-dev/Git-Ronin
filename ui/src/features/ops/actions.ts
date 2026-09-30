@@ -16,7 +16,7 @@ import { confirm } from "../../ui/confirm-store";
 import { toast, type ToastAction } from "../../ui/toast-store";
 import { invalidateRepo, keys } from "../workspace/queries";
 import { WORKING_COPY, updateView } from "../workspace/view";
-import { openDialog } from "./dialogs";
+import { openDialog } from "./dialog-store";
 import { startTask } from "./tasks";
 
 export type GitActions = ReturnType<typeof gitActions>;

@@ -24,7 +24,7 @@ import { useFork } from "../hosting/fork";
 import { HostingSections } from "../hosting/HostingSections";
 import { useRepoLinks } from "../hosting/queries";
 import { useGitActions } from "../ops/actions";
-import { openDialog } from "../ops/dialogs";
+import { openDialog } from "../ops/dialog-store";
 import { beginDrag, dropProps, useDrag, type DragRef } from "../ops/drag";
 import { localBranchMenu, remoteBranchMenu, remoteMenu, tagMenu } from "../ops/menus";
 import { useRepoContext } from "../ops/queries";

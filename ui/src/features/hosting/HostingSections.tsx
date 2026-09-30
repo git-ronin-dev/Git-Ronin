@@ -10,7 +10,7 @@ import { ContextMenu } from "../../ui/ContextMenu";
 import { CircleDot, GitPullRequest, LogIn, Plus, RefreshCw } from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { Tooltip } from "../../ui/Tooltip";
-import { openDialog } from "../ops/dialogs";
+import { openDialog } from "../ops/dialog-store";
 import { Leaf } from "../refs/SidebarTree";
 import { useRefs } from "../workspace/queries";
 import { updateView, useRepoView } from "../workspace/view";

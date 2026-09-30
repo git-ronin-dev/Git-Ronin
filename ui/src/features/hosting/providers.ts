@@ -47,7 +47,7 @@ export const PROVIDERS: Record<ProviderKind, ProviderInfo> = {
     },
     tokenPage: () => "https://id.atlassian.com/manage-profile/security/api-tokens",
     tokenHint:
-      "An Atlassian API token with Bitbucket scopes (account, repositories, pull requests, issues, pipelines and SSH keys).",
+      "An Atlassian API token with scopes, for Bitbucket: read:user, read:workspace, read:repository, write:repository, read:pullrequest, write:pullrequest, read:issue, write:issue, read:ssh-key and write:ssh-key (each ending in :bitbucket).",
     order: 2,
   },
   bitbucketServer: {

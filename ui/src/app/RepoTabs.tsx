@@ -3,7 +3,7 @@ import { forwardRef, type ComponentProps } from "react";
 
 import logo from "../assets/logo.png";
 import { activeProfileId } from "../features/commands/commands";
-import { openDialog } from "../features/ops/dialogs";
+import { openDialog } from "../features/ops/dialog-store";
 import { useConfig } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";
 import { DropdownMenu } from "../ui/DropdownMenu";

@@ -5,7 +5,7 @@ import logo from "../assets/logo.png";
 import { activeProfileId } from "../features/commands/commands";
 import { useShortcutLabel } from "../features/commands/useShortcuts";
 import { useProfileAccounts } from "../features/hosting/queries";
-import { openDialog } from "../features/ops/dialogs";
+import { openDialog } from "../features/ops/dialog-store";
 import { useGitIdentity } from "../features/settings/queries";
 import { useConfig } from "../features/workspace/queries";
 import { useWorkspace } from "../features/workspace/store";

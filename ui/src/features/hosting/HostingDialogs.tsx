@@ -6,7 +6,7 @@ import { ipc } from "../../lib/ipc";
 import { Checkbox, Field, Select, TextInput } from "../../ui/Field";
 import { toast } from "../../ui/toast-store";
 import { useCommitDetail } from "../commit/queries";
-import type { DialogRequest } from "../ops/dialogs";
+import type { DialogRequest } from "../ops/dialog-store";
 import { FormDialog } from "../ops/FormDialog";
 import { useRefs } from "../workspace/queries";
 import { updateView } from "../workspace/view";

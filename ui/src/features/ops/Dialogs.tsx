@@ -14,7 +14,7 @@ import { CreateIssue, CreatePullRequest } from "../hosting/HostingDialogs";
 import { RepoPicker } from "../hosting/RepoPicker";
 import { useGitActions } from "./actions";
 import { FormDialog } from "./FormDialog";
-import { useDialogs, type DialogRequest } from "./dialogs";
+import { useDialogs, type DialogRequest } from "./dialog-store";
 import { branchPrefixes } from "./prefixes";
 import { useFlowConfig } from "./queries";
 import { startTask, useTask } from "./tasks";

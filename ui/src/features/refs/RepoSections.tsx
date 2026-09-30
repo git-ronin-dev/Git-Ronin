@@ -21,7 +21,7 @@ import { Section } from "../../ui/Section";
 import { Tooltip } from "../../ui/Tooltip";
 import { revealCommit } from "../graph/reveal";
 import { useGitActions } from "../ops/actions";
-import { openDialog } from "../ops/dialogs";
+import { openDialog } from "../ops/dialog-store";
 import { useFlowConfig, useLfsLocks, useLfsStatus, useWorktrees } from "../ops/queries";
 import { useRefs, useRepoInfo } from "../workspace/queries";
 import { useWorkspace } from "../workspace/store";

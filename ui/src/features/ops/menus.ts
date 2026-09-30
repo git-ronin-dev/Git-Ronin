@@ -9,7 +9,7 @@ import type { MenuItem } from "../../ui/ContextMenu";
 import { useWorkspace } from "../workspace/store";
 import { updateView } from "../workspace/view";
 import { shortRev, type GitActions } from "./actions";
-import { openDialog } from "./dialogs";
+import { openDialog } from "./dialog-store";
 
 /** What menus need to know about the repository. */
 export interface RepoContext {

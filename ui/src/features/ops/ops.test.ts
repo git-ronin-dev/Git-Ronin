@@ -10,7 +10,7 @@ import { useToasts } from "../../ui/toast-store";
 import { keys } from "../workspace/queries";
 import { useViews, WORKING_COPY } from "../workspace/view";
 import { gitActions, shortRev, type GitActions } from "./actions";
-import { useDialogs } from "./dialogs";
+import { useDialogs } from "./dialog-store";
 import { dropActions, type DragRef } from "./drag";
 import { commitMenu, localBranchMenu, repoContext, tagMenu } from "./menus";
 import { startTask, useTasks } from "./tasks";
