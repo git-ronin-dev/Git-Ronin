@@ -61,7 +61,7 @@ window if there is one.
 - **App:** command palette, rebindable shortcuts, profiles, SSH key
   management, terminal panel, settings export and sync through a git repo
 - **Hosting:** GitHub, GitLab, Bitbucket (Cloud and Data Center), Azure DevOps
-  and Jira, via token or, for GitLab, browser sign-in; secrets live
+  and Jira, via token or, for GitHub, browser sign-in; secrets live
   in the system keyring. Pull requests (view, comment, approve, merge, check
   out, create), issues, CI checks, a launchpad, clone and fork from accounts,
   HTTPS push without password prompts
